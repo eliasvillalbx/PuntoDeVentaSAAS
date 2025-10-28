@@ -41,23 +41,39 @@
         x-data="layoutState()"
         x-init="init()">
 
-    {{-- TOASTS --}}
-    <div class="fixed inset-x-0 top-0 z-[60] flex justify-center pointer-events-none px-4 sm:px-6 lg:px-8">
-      <div class="w-full max-w-3xl mt-4 space-y-2 pointer-events-auto">
+    {{-- TOASTS (bottom) --}}
+    <div class="fixed inset-x-0 bottom-0 z-[60] flex justify-center pointer-events-none px-4 sm:px-6 lg:px-8">
+      <div class="w-full max-w-3xl mb-6 space-y-2 pointer-events-auto">
         @if (session('success'))
           <div x-data="{show:true}" x-init="setTimeout(()=>show=false,3500)" x-show="show" x-transition
-               class="rounded-lg bg-green-50 text-green-800 ring-1 ring-green-200 p-3">{{ session('success') }}</div>
+               class="rounded-lg bg-green-50 text-green-800 ring-1 ring-green-200 p-3 flex items-start gap-2">
+            <span class="material-symbols-outlined mi">check_circle</span>
+            <div>{{ session('success') }}</div>
+          </div>
         @endif
+
         @if (session('error'))
           <div x-data="{show:true}" x-init="setTimeout(()=>show=false,5000)" x-show="show" x-transition
-               class="rounded-lg bg-red-50 text-red-800 ring-1 ring-red-200 p-3">{{ session('error') }}</div>
+               class="rounded-lg bg-red-50 text-red-800 ring-1 ring-red-200 p-3 flex items-start gap-2">
+            <span class="material-symbols-outlined mi">error</span>
+            <div>{{ session('error') }}</div>
+          </div>
         @endif
+
         @if ($errors->any())
-          <div class="rounded-lg bg-red-50 text-red-800 ring-1 ring-red-200 p-3">{{ $errors->first() }}</div>
+          <div x-data="{show:true}" x-init="setTimeout(()=>show=false,5000)" x-show="show" x-transition
+               class="rounded-lg bg-red-50 text-red-800 ring-1 ring-red-200 p-3 flex items-start gap-2">
+            <span class="material-symbols-outlined mi">warning</span>
+            <div>{{ $errors->first() }}</div>
+          </div>
         @endif
+
         @if (session('info'))
           <div x-data="{show:true}" x-init="setTimeout(()=>show=false,3500)" x-show="show" x-transition
-               class="rounded-lg bg-blue-50 text-blue-800 ring-1 ring-blue-200 p-3">{{ session('info') }}</div>
+               class="rounded-lg bg-blue-50 text-blue-800 ring-1 ring-blue-200 p-3 flex items-start gap-2">
+            <span class="material-symbols-outlined mi">info</span>
+            <div>{{ session('info') }}</div>
+          </div>
         @endif
       </div>
     </div>
@@ -74,7 +90,7 @@
       ])
 
       <div class="flex">
-        {{-- SIDEBAR (cuando está oculto: w-0 y sin borde para que el contenido quede pegado) --}}
+        {{-- SIDEBAR --}}
         @include('layouts.sidebar')
 
         {{-- CONTENIDO --}}
@@ -104,7 +120,6 @@
           init() {
             const saved = localStorage.getItem('sidebarOpen');
             if (saved !== null) { try { this.sidebarOpen = JSON.parse(saved); } catch(_) {} }
-            // Cerrar dropdown con ESC
             window.addEventListener('keydown', e => { if (e.key === 'Escape') this.profileOpen = false; });
           },
 

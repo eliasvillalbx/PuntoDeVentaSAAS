@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\AdminEmpresaController;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,8 +51,16 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['role:superadmin'])->group(function () {
         Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
 
+
+        Route::resource('admin-empresas', AdminEmpresaController::class)
+        ->parameters(['admin-empresas' => 'admin_empresa']); 
         // Rutas solo para superadmin (o sin bloqueo de suscripción)
         Route::resource('empresas', EmpresaController::class);
+        Route::resource('suscripciones', \App\Http\Controllers\SuscripcionController::class)
+        ->parameters(['suscripciones' => 'suscripcion']);
+        // Renovar
+        Route::post('suscripciones/{suscripcion}/renew', [SuscripcionController::class, 'renew'])
+            ->name('suscripciones.renew');
     });
 
     /* =========================================================
@@ -63,6 +72,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Si quieres que NO superadmin gestionen empresas, déjalo aquí:
         Route::resource('empresas', EmpresaController::class)->names('empresas');
+        Route::resource('suscripciones', \App\Http\Controllers\SuscripcionController::class)
+        ->parameters(['suscripciones' => 'suscripcion']);
 
         // ...más rutas protegidas por suscripción
         // Route::resource('clientes', ClienteController::class);

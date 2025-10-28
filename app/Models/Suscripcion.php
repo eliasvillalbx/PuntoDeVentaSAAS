@@ -4,7 +4,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 class Suscripcion extends Model
@@ -21,37 +21,65 @@ class Suscripcion extends Model
     ];
 
     protected $casts = [
-        'fecha_inicio' => 'datetime',
-        'fecha_vencimiento' => 'datetime',
-        'renovado' => 'boolean',
+        'fecha_inicio'      => 'date',
+        'fecha_vencimiento' => 'date',
+        'renovado'          => 'boolean',
     ];
 
-    public const PLANES = ['1_mes','6_meses','1_año','3_años'];
-
-    public function empresa(): BelongsTo
+    /* =================== Relaciones =================== */
+    public function empresa()
     {
-        return $this->belongsTo(Empresa::class, 'empresa_id');
+        return $this->belongsTo(Empresa::class);
     }
 
-    /** Devuelve la fecha de vencimiento calculada a partir del inicio y el plan */
+    /* =================== Scopes útiles =================== */
+    public function scopeDeEmpresa(Builder $q, int $empresaId): Builder
+    {
+        return $q->where('empresa_id', $empresaId);
+    }
+
+    public function scopeActiva(Builder $q): Builder
+    {
+        return $q->where('estado', 'activa')
+                 ->whereDate('fecha_vencimiento', '>=', now()->toDateString());
+    }
+
+    public function scopeVencida(Builder $q): Builder
+    {
+        return $q->where(function ($w) {
+            $w->where('estado', 'vencida')
+              ->orWhereDate('fecha_vencimiento', '<', now()->toDateString());
+        });
+    }
+
+    /* =================== Helpers =================== */
     public static function calcularVencimiento(Carbon $inicio, string $plan): Carbon
     {
-        return match ($plan) {
-            '1_mes'   => $inicio->copy()->addMonthNoOverflow(),
-            '6_meses' => $inicio->copy()->addMonthsNoOverflow(6),
-            '1_año'   => $inicio->copy()->addYearNoOverflow(),
-            '3_años'  => $inicio->copy()->addYearsNoOverflow(3),
-            default   => throw new \InvalidArgumentException('Plan inválido'),
+        $plan = strtolower($plan);
+        $months = match ($plan) {
+            'mensual'     => 1,
+            'trimestral'  => 3,
+            'anual'       => 12,
+            default       => 1,
         };
+
+        // Evita desbordes (28->29/30/31)
+        return (clone $inicio)->addMonthsNoOverflow($months);
     }
 
-    /** ¿Sigue vigente (activa y sin vencer)? */
-    public function getVigenteAttribute(): bool
+    public function getEstaVigenteAttribute(): bool
     {
-        return $this->estado === 'activa' && now()->lessThanOrEqualTo($this->fecha_vencimiento);
+        return $this->estado === 'activa'
+            && $this->fecha_vencimiento?->isFuture();
     }
 
-    /* Scopes útiles */
-    public function scopeActiva($q) { return $q->where('estado', 'activa'); }
-    public function scopeDeEmpresa($q, int $empresaId) { return $q->where('empresa_id', $empresaId); }
+    protected static function booted(): void
+    {
+        // Cada vez que guardemos, si ya venció, marcamos estado "vencida" automáticamente
+        static::saving(function (Suscripcion $s) {
+            if ($s->fecha_vencimiento && $s->fecha_vencimiento->isPast() && $s->estado === 'activa') {
+                $s->estado = 'vencida';
+            }
+        });
+    }
 }

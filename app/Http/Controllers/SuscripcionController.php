@@ -1,65 +1,80 @@
 <?php
+// app/Http/Controllers/SuscripcionController.php
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreSuscripcionRequest;
 use App\Models\Suscripcion;
+use App\Models\Empresa;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SuscripcionController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    /** Alta tras pago correcto */
+    public function store(StoreSuscripcionRequest $request): RedirectResponse
     {
-        //
+        $data = $request->validated();
+
+        try {
+            return DB::transaction(function () use ($data) {
+                $empresa = Empresa::findOrFail($data['empresa_id']);
+
+                // Si quieres permitir una sola activa por empresa, valida:
+                $hayActiva = Suscripcion::deEmpresa($empresa->id)->activa()
+                    ->where('fecha_vencimiento', '>=', now())
+                    ->exists();
+
+                if ($hayActiva) {
+                    return back()->withErrors('La empresa ya tiene una suscripción activa.');
+                }
+
+                $inicio = isset($data['fecha_inicio']) ? Carbon::parse($data['fecha_inicio']) : now();
+                $venc   = Suscripcion::calcularVencimiento($inicio, $data['plan']);
+
+                Suscripcion::create([
+                    'empresa_id'       => $empresa->id,
+                    'plan'             => $data['plan'],
+                    'fecha_inicio'     => $inicio,
+                    'fecha_vencimiento'=> $venc,
+                    'estado'           => 'activa',
+                    'renovado'         => false,
+                ]);
+
+                return back()->with('success', 'Suscripción activada.');
+            });
+        } catch (\Throwable $e) {
+            Log::error('Error al crear suscripción', ['e' => $e]);
+            return back()->withErrors('No se pudo activar la suscripción.');
+        }
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    /** Renovación (pago exitoso después de vencer) */
+    public function renew(Request $request, Suscripcion $suscripcion): RedirectResponse
     {
-        //
-    }
+        try {
+            // Renovamos solo si ya venció:
+            if ($suscripcion->estado !== 'vencida') {
+                return back()->withErrors('Solo puedes renovar suscripciones vencidas.');
+            }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
+            $inicio = now(); // o el día posterior al vencimiento anterior
+            $venc   = Suscripcion::calcularVencimiento($inicio, $suscripcion->plan);
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Suscripcion $suscripcion)
-    {
-        //
-    }
+            $suscripcion->update([
+                'fecha_inicio'      => $inicio,
+                'fecha_vencimiento' => $venc,
+                'estado'            => 'activa',
+                'renovado'          => true,
+            ]);
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Suscripcion $suscripcion)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Suscripcion $suscripcion)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Suscripcion $suscripcion)
-    {
-        //
+            return back()->with('success', 'Suscripción renovada.');
+        } catch (\Throwable $e) {
+            Log::error('Error al renovar suscripción', ['e' => $e]);
+            return back()->withErrors('No se pudo renovar.');
+        }
     }
 }

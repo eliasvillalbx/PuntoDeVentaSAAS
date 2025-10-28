@@ -7,6 +7,10 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AdminEmpresaController;
 use App\Http\Controllers\GerenteController;
 use App\Http\Controllers\VendedorController;
+use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\ProveedorController;
+use App\Http\Controllers\ProductoProveedorController;
 
 /*
 |--------------------------------------------------------------------------
@@ -53,6 +57,24 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['role:superadmin'])->group(function () {
         Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
 
+        Route::resource('categorias', CategoriaController::class)
+        ->parameters(['categorias' => 'categoria']);
+
+    Route::resource('productos', ProductoController::class)
+        ->parameters(['productos' => 'producto']);
+
+    Route::resource('proveedores', ProveedorController::class)
+        ->parameters(['proveedores' => 'proveedore']); // {proveedore} por convención
+
+    // Pivote: costos por proveedor en un producto
+    Route::post('productos/{producto}/proveedores', [ProductoProveedorController::class, 'store'])
+        ->name('productos.proveedores.store');
+
+    Route::put('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'update'])
+        ->name('productos.proveedores.update');
+
+    Route::delete('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'destroy'])
+        ->name('productos.proveedores.destroy');
 
         Route::resource('admin-empresas', AdminEmpresaController::class)
         ->parameters(['admin-empresas' => 'admin_empresa']); 
@@ -91,6 +113,26 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('vendedores', \App\Http\Controllers\VendedorController::class)
             ->parameters(['vendedores' => 'vendedor'])
             ->middleware(['auth','verified']);
+
+
+            Route::resource('categorias', CategoriaController::class)
+        ->parameters(['categorias' => 'categoria']);
+
+    Route::resource('productos', ProductoController::class)
+        ->parameters(['productos' => 'producto']);
+
+    Route::resource('proveedores', ProveedorController::class)
+        ->parameters(['proveedores' => 'proveedore']); // {proveedore} por convención
+
+    // Pivote: costos por proveedor en un producto
+    Route::post('productos/{producto}/proveedores', [ProductoProveedorController::class, 'store'])
+        ->name('productos.proveedores.store');
+
+    Route::put('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'update'])
+        ->name('productos.proveedores.update');
+
+    Route::delete('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'destroy'])
+        ->name('productos.proveedores.destroy');
         // ...más rutas protegidas por suscripción
         // Route::resource('clientes', ClienteController::class);
         // Route::get('/reportes', [ReporteController::class, 'index'])->name('reportes.index');

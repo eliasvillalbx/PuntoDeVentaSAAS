@@ -5,6 +5,8 @@ use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AdminEmpresaController;
+use App\Http\Controllers\GerenteController;
+use App\Http\Controllers\VendedorController;
 
 /*
 |--------------------------------------------------------------------------
@@ -61,6 +63,13 @@ Route::middleware(['auth'])->group(function () {
         // Renovar
         Route::post('suscripciones/{suscripcion}/renew', [SuscripcionController::class, 'renew'])
             ->name('suscripciones.renew');
+
+        Route::resource('gerentes', \App\Http\Controllers\GerenteController::class)
+        ->parameters(['gerentes' => 'gerente']);    
+
+        Route::resource('vendedores', \App\Http\Controllers\VendedorController::class)
+        ->parameters(['vendedores' => 'vendedor'])
+        ->middleware(['auth','verified']);
     });
 
     /* =========================================================
@@ -75,6 +84,13 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('suscripciones', \App\Http\Controllers\SuscripcionController::class)
         ->parameters(['suscripciones' => 'suscripcion']);
 
+        Route::resource('gerentes', \App\Http\Controllers\GerenteController::class)
+        ->parameters(['gerentes' => 'gerente']);
+
+
+        Route::resource('vendedores', \App\Http\Controllers\VendedorController::class)
+            ->parameters(['vendedores' => 'vendedor'])
+            ->middleware(['auth','verified']);
         // ...más rutas protegidas por suscripción
         // Route::resource('clientes', ClienteController::class);
         // Route::get('/reportes', [ReporteController::class, 'index'])->name('reportes.index');

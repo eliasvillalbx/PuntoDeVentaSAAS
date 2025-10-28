@@ -8,6 +8,7 @@
     // estado de cada categoría (acordeón)
     open:{
       general:true,
+      operacion:true,     // ← agregado
       facturacion:true,
       accesos:true,
     }
@@ -103,6 +104,83 @@
           </a>
         </div>
       </div>
+
+      {{-- ===== Sección: Operación (Gerentes / Vendedores) ===== --}}
+      @if(auth()->user()?->hasAnyRole(['superadmin','administrador_empresa','gerente']))
+      <div class="space-y-1">
+        {{-- Encabezado (acordeón) --}}
+        <button type="button"
+                class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-semibold tracking-wide
+                       text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                x-show="sidebarOpen" x-transition
+                @click="open.operacion = !open.operacion"
+                :aria-expanded="open.operacion.toString()"
+                aria-controls="sec-operacion">
+          <span class="material-symbols-outlined mi text-base">work</span>
+          OPERACIÓN
+          <span class="ml-auto material-symbols-outlined mi text-sm transition-transform"
+                :class="open.operacion ? 'rotate-0' : '-rotate-90'">expand_more</span>
+        </button>
+
+        <div class="px-1" x-show="!sidebarOpen" x-transition>
+          <div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+        </div>
+
+        <div id="sec-operacion" x-show="open.operacion" x-collapse class="space-y-1" x-cloak>
+          {{-- Gerentes --}}
+          <a
+            href="{{ route('gerentes.index') }}"
+            class="group relative flex items-center gap-3 px-3 py-2 rounded-lg
+                   {{ $isActive('gerentes.*') ? 'bg-gray-100 text-gray-900 ring-1 ring-gray-200' : 'text-gray-700 hover:bg-gray-50' }}"
+            role="menuitem"
+            aria-label="Gerentes"
+            aria-current="{{ $isActive('gerentes.*') ? 'page' : 'false' }}"
+            title="Gerentes"
+          >
+            @if($isActive('gerentes.*'))
+              <span class="absolute left-0 top-1 bottom-1 w-1 bg-indigo-600 rounded-r"></span>
+            @endif
+            <span class="material-symbols-outlined mi">supervisor_account</span>
+            <span class="text-sm font-medium" x-show="sidebarOpen" x-transition>Gerentes</span>
+
+            {{-- Tooltip colapsado --}}
+            <span
+              x-show="!sidebarOpen"
+              x-transition
+              class="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-md opacity-0 group-hover:opacity-100"
+            >
+              Gerentes
+            </span>
+          </a>
+
+          {{-- Vendedores --}}
+          <a
+            href="{{ route('vendedores.index') }}"
+            class="group relative flex items-center gap-3 px-3 py-2 rounded-lg
+                   {{ $isActive('vendedores.*') ? 'bg-gray-100 text-gray-900 ring-1 ring-gray-200' : 'text-gray-700 hover:bg-gray-50' }}"
+            role="menuitem"
+            aria-label="Vendedores"
+            aria-current="{{ $isActive('vendedores.*') ? 'page' : 'false' }}"
+            title="Vendedores"
+          >
+            @if($isActive('vendedores.*'))
+              <span class="absolute left-0 top-1 bottom-1 w-1 bg-indigo-600 rounded-r"></span>
+            @endif
+            <span class="material-symbols-outlined mi">groups</span>
+            <span class="text-sm font-medium" x-show="sidebarOpen" x-transition>Vendedores</span>
+
+            {{-- Tooltip colapsado --}}
+            <span
+              x-show="!sidebarOpen"
+              x-transition
+              class="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-md opacity-0 group-hover:opacity-100"
+            >
+              Vendedores
+            </span>
+          </a>
+        </div>
+      </div>
+      @endif
 
       {{-- ===== Sección: Facturación ===== --}}
       <div class="space-y-1">

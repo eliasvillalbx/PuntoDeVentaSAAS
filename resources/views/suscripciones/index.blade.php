@@ -13,20 +13,6 @@
     </div>
   </x-slot>
 
-  {{-- Mensajes (debajo del navbar) --}}
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
-    @if (session('success'))
-      <div class="mb-3 rounded-lg bg-green-50 text-green-800 ring-1 ring-green-200 p-3" role="alert">
-        {{ session('success') }}
-      </div>
-    @endif
-    @if ($errors->any())
-      <div class="mb-3 rounded-lg bg-red-50 text-red-800 ring-1 ring-red-200 p-3" role="alert">
-        {{ $errors->first() }}
-      </div>
-    @endif
-  </div>
-
   @php
     $planLabel = [
       '1_mes'   => '1 mes',

@@ -1,3 +1,4 @@
+{{-- resources/views/categorias/index.blade.php --}}
 <x-app-layout>
   <x-slot name="header">
     <div class="flex items-center justify-between">
@@ -22,17 +23,19 @@
         <input type="text" name="q" value="{{ $q ?? '' }}" placeholder="Nombre o descripción…"
                class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
       </div>
+
       @if(isset($empresas) && $empresas->count())
-      <div class="lg:col-span-2">
-        <label class="block text-xs text-gray-600 mb-1">Empresa</label>
-        <select name="empresa_id" class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
-          <option value="">Todas</option>
-          @foreach ($empresas as $em)
-            <option value="{{ $em->id }}" @selected(($empresaId ?? null) == $em->id)>{{ $em->razon_social }}</option>
-          @endforeach
-        </select>
-      </div>
+        <div class="lg:col-span-2">
+          <label class="block text-xs text-gray-600 mb-1">Empresa</label>
+          <select name="empresa_id" class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
+            <option value="">Todas</option>
+            @foreach ($empresas as $em)
+              <option value="{{ $em->id }}" @selected(($empresaId ?? null) == $em->id)>{{ $em->razon_social }}</option>
+            @endforeach
+          </select>
+        </div>
       @endif
+
       <div>
         <label class="block text-xs text-gray-600 mb-1">Activa</label>
         <select name="activa" class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
@@ -41,7 +44,8 @@
           <option value="0" @selected(($activa ?? '')==='0')>No</option>
         </select>
       </div>
-      <div class="flex items-end justify-end gap-2">
+
+      <div class="lg:col-span-5 flex items-end justify-end gap-2">
         <button type="submit" class="h-10 px-4 rounded-lg bg-gray-900 text-white text-sm">Aplicar</button>
         <a href="{{ route('categorias.index') }}" class="h-10 px-4 rounded-lg border text-sm text-gray-700">Limpiar</a>
       </div>
@@ -77,10 +81,17 @@
                 <td class="px-4 py-3 text-gray-700">{{ $c->created_at?->format('Y-m-d H:i') }}</td>
                 <td class="px-4 py-3">
                   <div class="flex justify-end gap-1">
+                    {{-- Ver --}}
+                    <a href="{{ route('categorias.show', $c) }}"
+                       class="px-2.5 py-1.5 rounded-lg text-gray-700 hover:bg-gray-100" title="Ver">
+                      <span class="material-symbols-outlined mi text-base">visibility</span>
+                    </a>
+                    {{-- Editar --}}
                     <a href="{{ route('categorias.edit', $c) }}"
                        class="px-2.5 py-1.5 rounded-lg text-gray-700 hover:bg-gray-100" title="Editar">
                       <span class="material-symbols-outlined mi text-base">edit</span>
                     </a>
+                    {{-- Eliminar --}}
                     <form method="POST" action="{{ route('categorias.destroy', $c) }}"
                           onsubmit="return confirm('¿Eliminar categoría?');">
                       @csrf @method('DELETE')
@@ -99,6 +110,7 @@
           </tbody>
         </table>
       </div>
+
       <div class="px-4 py-3 border-t border-gray-100 bg-white">
         {{ $cats->onEachSide(1)->links() }}
       </div>

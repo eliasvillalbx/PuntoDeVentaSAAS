@@ -1,3 +1,4 @@
+{{-- resources/views/proveedores/index.blade.php --}}
 <x-app-layout>
   <x-slot name="header">
     <div class="flex items-center justify-between">
@@ -13,9 +14,8 @@
     </div>
   </x-slot>
 
-
-
   <div class="max-w-7xl mx-auto space-y-6">
+    {{-- Filtros --}}
     <form method="GET" action="{{ route('proveedores.index') }}"
           class="bg-white rounded-xl border border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
       <div class="lg:col-span-2">
@@ -23,6 +23,7 @@
         <input type="text" name="q" value="{{ $q ?? '' }}" placeholder="Nombre, RFC, email, teléfono, contacto…"
                class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
       </div>
+
       @if(isset($empresas) && $empresas->count())
       <div class="lg:col-span-2">
         <label class="block text-xs text-gray-600 mb-1">Empresa</label>
@@ -34,6 +35,7 @@
         </select>
       </div>
       @endif
+
       <div>
         <label class="block text-xs text-gray-600 mb-1">Activo</label>
         <select name="activo" class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
@@ -42,12 +44,14 @@
           <option value="0" @selected(($activo ?? '')==='0')>No</option>
         </select>
       </div>
+
       <div class="flex items-end justify-end gap-2">
         <button type="submit" class="h-10 px-4 rounded-lg bg-gray-900 text-white text-sm">Aplicar</button>
         <a href="{{ route('proveedores.index') }}" class="h-10 px-4 rounded-lg border text-sm text-gray-700">Limpiar</a>
       </div>
     </form>
 
+    {{-- Tabla --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
@@ -55,7 +59,6 @@
             <tr>
               <th class="px-4 py-3 text-left">Nombre</th>
               <th class="px-4 py-3 text-left">RFC</th>
-              <th class="px-4 py-3 text-left">Contacto</th>
               <th class="px-4 py-3 text-left">Email</th>
               <th class="px-4 py-3 text-left">Teléfono</th>
               <th class="px-4 py-3 text-left">Estado</th>
@@ -69,7 +72,6 @@
                   <a href="{{ route('proveedores.show', $p) }}" class="hover:underline">{{ $p->nombre }}</a>
                 </td>
                 <td class="px-4 py-3 text-gray-700">{{ $p->rfc ?: '—' }}</td>
-                <td class="px-4 py-3 text-gray-700">{{ $p->contacto ?: '—' }}</td>
                 <td class="px-4 py-3 text-gray-700">{{ $p->email ?: '—' }}</td>
                 <td class="px-4 py-3 text-gray-700">{{ $p->telefono ?: '—' }}</td>
                 <td class="px-4 py-3">
@@ -81,10 +83,17 @@
                 </td>
                 <td class="px-4 py-3">
                   <div class="flex justify-end gap-1">
+                    {{-- Ver --}}
+                    <a href="{{ route('proveedores.show', $p) }}"
+                       class="px-2.5 py-1.5 rounded-lg text-gray-700 hover:bg-gray-100" title="Ver">
+                      <span class="material-symbols-outlined mi text-base">visibility</span>
+                    </a>
+                    {{-- Editar --}}
                     <a href="{{ route('proveedores.edit', $p) }}"
                        class="px-2.5 py-1.5 rounded-lg text-gray-700 hover:bg-gray-100" title="Editar">
                       <span class="material-symbols-outlined mi text-base">edit</span>
                     </a>
+                    {{-- Eliminar --}}
                     <form method="POST" action="{{ route('proveedores.destroy', $p) }}"
                           onsubmit="return confirm('¿Eliminar proveedor?');">
                       @csrf @method('DELETE')
@@ -103,6 +112,7 @@
           </tbody>
         </table>
       </div>
+
       <div class="px-4 py-3 border-t border-gray-100 bg-white">
         {{ $proveedores->onEachSide(1)->links() }}
       </div>

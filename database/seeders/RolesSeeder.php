@@ -14,7 +14,7 @@ class RolesSeeder extends Seeder
             'superadmin',
             'administrador_empresa',
             'gerente',
-            'empleado',
+            'vendedor',
         ] as $name) {
             Role::firstOrCreate([
                 'name' => $name,

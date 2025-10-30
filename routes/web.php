@@ -11,6 +11,8 @@ use App\Http\Controllers\CategoriaController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\ProductoProveedorController;
+use App\Http\Controllers\VentaController;
+use App\Http\Controllers\ClienteController;
 
 /*
 |--------------------------------------------------------------------------
@@ -92,6 +94,14 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('vendedores', \App\Http\Controllers\VendedorController::class)
         ->parameters(['vendedores' => 'vendedor'])
         ->middleware(['auth','verified']);
+
+
+
+        Route::resource('ventas', VentaController::class);
+    Route::post('ventas/{venta}/convertir', [VentaController::class, 'convertirPrefactura'])->name('ventas.convertir');
+
+    // Opcional PDF:
+    Route::get('ventas/{venta}/pdf', [VentaController::class, 'exportPdf'])->name('ventas.pdf');
     });
 
     /* =========================================================
@@ -133,6 +143,16 @@ Route::middleware(['auth'])->group(function () {
 
     Route::delete('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'destroy'])
         ->name('productos.proveedores.destroy');
+
+
+        Route::resource('ventas', VentaController::class);
+    Route::post('ventas/{venta}/convertir', [VentaController::class, 'convertirPrefactura'])->name('ventas.convertir');
+
+    // Opcional PDF:
+    Route::get('ventas/{venta}/pdf', [VentaController::class, 'exportPdf'])->name('ventas.pdf');
+    Route::resource('clientes', ClienteController::class);
+
+    
         // ...más rutas protegidas por suscripción
         // Route::resource('clientes', ClienteController::class);
         // Route::get('/reportes', [ReporteController::class, 'index'])->name('reportes.index');

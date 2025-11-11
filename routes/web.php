@@ -1,6 +1,11 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+
+/**
+ * Controladores
+ * Nota: mantenemos importaciones explícitas para autocompletado y claridad.
+ */
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\ProfileController;
@@ -13,14 +18,22 @@ use App\Http\Controllers\ProveedorController;
 use App\Http\Controllers\ProductoProveedorController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\CompraController;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
+| En este archivo definimos rutas de la aplicación web (guardadas por sesión).
+| - Mantén las rutas coherentes con tus middlewares y roles.
+| - Evita duplicar Route::resource con el mismo prefijo/URI para no sobrescribir.
 */
 
-// Home: si está autenticado manda a dashboard; si no, welcome
+/* ==================== HOME (público) ==================== */
+/**
+ * Si el usuario está autenticado, lo mandamos a dashboard.
+ * Si no, mostramos welcome.
+ */
 Route::get('/', function () {
     return auth()->check()
         ? to_route('dashboard')
@@ -33,12 +46,12 @@ require __DIR__ . '/auth.php';
 /* ==================== RUTAS PROTEGIDAS (auth) ==================== */
 Route::middleware(['auth'])->group(function () {
 
-    /* ---------- Billing / Suscripciones (sin bloqueo de suscripción) ---------- */
+    /* ---------- Dashboard (visible para cualquier usuario autenticado) ---------- */
+    Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
 
+    /* ---------- Billing / Suscripciones básicas (sin bloqueo de suscripción) ---------- */
     // Pantalla de aviso de pago
-    Route::get('/billing/alert', function () {
-        return view('billing.alert');
-    })->name('billing.alert');
+    Route::get('/billing/alert', fn () => view('billing.alert'))->name('billing.alert');
 
     // Activar suscripción tras pago (alta)
     Route::post('/suscripciones', [SuscripcionController::class, 'store'])
@@ -48,113 +61,129 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/suscripciones/{suscripcion}/renew', [SuscripcionController::class, 'renew'])
         ->name('suscripciones.renew');
 
-    // Perfil (Breeze) — opcional
+    /* ---------- Perfil (Breeze) ---------- */
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    /* =========================================================
-     *   ZONA SUPERADMIN (SIN SUSCRIPCIÓN)
-     * ========================================================= */
+    /* =======================================================================
+     * RUTAS COMPARTIDAS (útiles para ambos entornos: superadmin y con suscripción)
+     * ======================================================================= */
+
+    /**
+     * Utilidades de compras para front (consulta de proveedores/costos por producto)
+     * Disponibles para cualquier autenticado (no mutan estado).
+     * Si deseas restringirlas, muévelas al grupo correspondiente.
+     */
+    Route::get('/productos/{producto}/proveedores-json', [CompraController::class, 'proveedoresProducto'])
+        ->name('productos.proveedores_json');
+    Route::get('/productos/{producto}/costo-para/{proveedor}', [CompraController::class, 'costoProductoProveedor'])
+        ->name('productos.costo_para_proveedor');
+
+    /**
+     * ==================== VENTAS (UNIFICADO) ====================
+     * Evitamos duplicar estas rutas en subgrupos para no romper nombres/URIs.
+     * - Nombre correcto de conversión: ventas.convertirPrefactura (POST)
+     * - PDF usa el método `pdf()` del controlador
+     */
+    Route::resource('ventas', VentaController::class)
+        ->parameters(['ventas' => 'venta']);
+
+    Route::post('ventas/{venta}/convertir', [VentaController::class, 'convertirPrefactura'])
+        ->name('ventas.convertirPrefactura');
+
+    Route::get('ventas/{venta}/pdf', [VentaController::class, 'pdf'])
+        ->name('ventas.pdf');
+
+    /* =========================================================================
+     *   ZONA SUPERADMIN (SIN BLOQUEO DE SUSCRIPCIÓN)
+     *   - Todo lo de gestión global: empresas, suscripciones, usuarios claves, catálogos
+     * ========================================================================= */
     Route::middleware(['role:superadmin'])->group(function () {
-        Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
 
+        // Administración de compras (sin bloqueo de suscripción para SA)
+        Route::resource('compras', CompraController::class);
+        Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])
+            ->name('compras.recibir');
+
+        // Catálogos
         Route::resource('categorias', CategoriaController::class)
-        ->parameters(['categorias' => 'categoria']);
+            ->parameters(['categorias' => 'categoria']);
 
-    Route::resource('productos', ProductoController::class)
-        ->parameters(['productos' => 'producto']);
+        Route::resource('productos', ProductoController::class)
+            ->parameters(['productos' => 'producto']);
 
-    Route::resource('proveedores', ProveedorController::class)
-        ->parameters(['proveedores' => 'proveedore']); // {proveedore} por convención
+        Route::resource('proveedores', ProveedorController::class)
+            ->parameters(['proveedores' => 'proveedore']); // {proveedore} por convención
 
-    // Pivote: costos por proveedor en un producto
-    Route::post('productos/{producto}/proveedores', [ProductoProveedorController::class, 'store'])
-        ->name('productos.proveedores.store');
+        // Pivote: costos por proveedor en un producto
+        Route::post('productos/{producto}/proveedores', [ProductoProveedorController::class, 'store'])
+            ->name('productos.proveedores.store');
+        Route::put('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'update'])
+            ->name('productos.proveedores.update');
+        Route::delete('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'destroy'])
+            ->name('productos.proveedores.destroy');
 
-    Route::put('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'update'])
-        ->name('productos.proveedores.update');
-
-    Route::delete('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'destroy'])
-        ->name('productos.proveedores.destroy');
-
+        // Gestión de empresas/suscripciones/usuarios de alto nivel
         Route::resource('admin-empresas', AdminEmpresaController::class)
-        ->parameters(['admin-empresas' => 'admin_empresa']); 
-        // Rutas solo para superadmin (o sin bloqueo de suscripción)
+            ->parameters(['admin-empresas' => 'admin_empresa']);
+
         Route::resource('empresas', EmpresaController::class);
-        Route::resource('suscripciones', \App\Http\Controllers\SuscripcionController::class)
-        ->parameters(['suscripciones' => 'suscripcion']);
-        // Renovar
-        Route::post('suscripciones/{suscripcion}/renew', [SuscripcionController::class, 'renew'])
-            ->name('suscripciones.renew');
 
-        Route::resource('gerentes', \App\Http\Controllers\GerenteController::class)
-        ->parameters(['gerentes' => 'gerente']);    
+        Route::resource('suscripciones', SuscripcionController::class)
+            ->parameters(['suscripciones' => 'suscripcion']);
+        // (la ruta de renew pública ya está arriba; aquí pueden coexistir vistas CRUD)
 
-        Route::resource('vendedores', \App\Http\Controllers\VendedorController::class)
-        ->parameters(['vendedores' => 'vendedor'])
-        ->middleware(['auth','verified']);
+        Route::resource('gerentes', GerenteController::class)
+            ->parameters(['gerentes' => 'gerente']);
 
-
-
-        Route::resource('ventas', VentaController::class);
-    Route::post('ventas/{venta}/convertir', [VentaController::class, 'convertirPrefactura'])->name('ventas.convertir');
-
-    // Opcional PDF:
-    Route::get('ventas/{venta}/pdf', [VentaController::class, 'exportPdf'])->name('ventas.pdf');
+        Route::resource('vendedores', VendedorController::class)
+            ->parameters(['vendedores' => 'vendedor']);
     });
 
-    /* =========================================================
+    /* =========================================================================
      *   ZONA APP NORMAL (CON SUSCRIPCIÓN ACTIVA)
-     *   Para admin_empresa, gerente, empleado, etc.
-     * ========================================================= */
+     *   - Módulos operativos para administradores de empresa, gerentes, vendedores
+     * ========================================================================= */
     Route::middleware(['suscripcion.activa'])->group(function () {
-        Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
 
-        // Si quieres que NO superadmin gestionen empresas, déjalo aquí:
-        Route::resource('empresas', EmpresaController::class)->names('empresas');
-        Route::resource('suscripciones', \App\Http\Controllers\SuscripcionController::class)
-        ->parameters(['suscripciones' => 'suscripcion']);
+        // Compras (operativas)
+        Route::resource('compras', CompraController::class);
+        Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])
+            ->name('compras.recibir');
 
-        Route::resource('gerentes', \App\Http\Controllers\GerenteController::class)
-        ->parameters(['gerentes' => 'gerente']);
+        // Empresas (si decides permitir administración a no-SA, deja este resource;
+        // en caso contrario, elimínalo de aquí y deja solo el de superadmin)
+        Route::resource('empresas', EmpresaController::class)
+            ->names('empresas');
 
+        // CRUDs de catálogo (operativos)
+        Route::resource('categorias', CategoriaController::class)
+            ->parameters(['categorias' => 'categoria']);
 
-        Route::resource('vendedores', \App\Http\Controllers\VendedorController::class)
-            ->parameters(['vendedores' => 'vendedor'])
-            ->middleware(['auth','verified']);
+        Route::resource('productos', ProductoController::class)
+            ->parameters(['productos' => 'producto']);
 
+        Route::resource('proveedores', ProveedorController::class)
+            ->parameters(['proveedores' => 'proveedore']);
 
-            Route::resource('categorias', CategoriaController::class)
-        ->parameters(['categorias' => 'categoria']);
+        // Pivote: costos por proveedor en un producto (operativo)
+        Route::post('productos/{producto}/proveedores', [ProductoProveedorController::class, 'store'])
+            ->name('productos.proveedores.store');
+        Route::put('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'update'])
+            ->name('productos.proveedores.update');
+        Route::delete('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'destroy'])
+            ->name('productos.proveedores.destroy');
 
-    Route::resource('productos', ProductoController::class)
-        ->parameters(['productos' => 'producto']);
+        // Gestión de personal operativo (si aplica)
+        Route::resource('gerentes', GerenteController::class)
+            ->parameters(['gerentes' => 'gerente']);
 
-    Route::resource('proveedores', ProveedorController::class)
-        ->parameters(['proveedores' => 'proveedore']); // {proveedore} por convención
+        Route::resource('vendedores', VendedorController::class)
+            ->parameters(['vendedores' => 'vendedor']);
 
-    // Pivote: costos por proveedor en un producto
-    Route::post('productos/{producto}/proveedores', [ProductoProveedorController::class, 'store'])
-        ->name('productos.proveedores.store');
-
-    Route::put('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'update'])
-        ->name('productos.proveedores.update');
-
-    Route::delete('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'destroy'])
-        ->name('productos.proveedores.destroy');
-
-
-        Route::resource('ventas', VentaController::class);
-    Route::post('ventas/{venta}/convertir', [VentaController::class, 'convertirPrefactura'])->name('ventas.convertir');
-
-    // Opcional PDF:
-    Route::get('ventas/{venta}/pdf', [VentaController::class, 'exportPdf'])->name('ventas.pdf');
-    Route::resource('clientes', ClienteController::class);
-
-    
-        // ...más rutas protegidas por suscripción
-        // Route::resource('clientes', ClienteController::class);
-        // Route::get('/reportes', [ReporteController::class, 'index'])->name('reportes.index');
+        // Clientes
+        Route::resource('clientes', ClienteController::class);
     });
+
 });

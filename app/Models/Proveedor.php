@@ -32,4 +32,10 @@ class Proveedor extends Model
     {
         return $q->where('id_empresa', $empresaId);
     }
+
+    public function compras()
+    {
+        return $this->hasMany(Compra::class, 'id_proveedor');
+    }
+
 }

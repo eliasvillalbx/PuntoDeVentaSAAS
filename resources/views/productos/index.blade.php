@@ -1,4 +1,3 @@
-{{-- resources/views/productos/index.blade.php --}}
 <x-app-layout>
   <x-slot name="header">
     <div class="flex items-center justify-between">
@@ -6,128 +5,137 @@
         <span class="material-symbols-outlined mi">inventory_2</span>
         Productos
       </h1>
-      <a href="{{ route('productos.create') }}"
-         class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium shadow hover:bg-indigo-700">
-        <span class="material-symbols-outlined mi text-base">add</span>
-        Nuevo producto
-      </a>
+
+      <div class="flex items-center gap-2">
+        <a href="{{ route('productos.create') }}"
+           class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-gray-800 text-white text-sm hover:bg-gray-900">
+          <span class="material-symbols-outlined mi text-base">add</span>
+          Nuevo producto
+        </a>
+      </div>
     </div>
   </x-slot>
 
   <div class="max-w-7xl mx-auto space-y-6">
+    @if ($errors->any())
+      <div class="rounded-lg bg-red-50 text-red-800 ring-1 ring-red-200 p-3">
+        {{ $errors->first() }}
+      </div>
+    @endif
+    @if (session('success'))
+      <div class="rounded-lg bg-green-50 text-green-800 ring-1 ring-green-200 p-3">{{ session('success') }}</div>
+    @endif
+
     {{-- Filtros --}}
-    <form method="GET" action="{{ route('productos.index') }}"
-          class="bg-white rounded-xl border border-gray-200 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-      <div class="lg:col-span-2">
-        <label class="block text-xs text-gray-600 mb-1">Buscar</label>
-        <input type="text" name="q" value="{{ $q ?? '' }}" placeholder="Nombre, SKU o descripción…"
-               class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
+    <form method="GET" class="bg-white rounded-xl border p-4 grid grid-cols-1 sm:grid-cols-5 gap-3">
+      <div class="sm:col-span-2 flex">
+        <input type="text" name="q" value="{{ request('q') }}" placeholder="Buscar por nombre o SKU…"
+               class="flex-1 rounded-l-lg border-gray-300">
+        <button class="px-3 rounded-r-lg bg-gray-800 text-white">Buscar</button>
       </div>
 
-      @if(isset($empresas) && $empresas->count())
-        <div class="lg:col-span-2">
-          <label class="block text-xs text-gray-600 mb-1">Empresa</label>
-          <select name="empresa_id" class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
-            <option value="">Todas</option>
-            @foreach ($empresas as $em)
-              <option value="{{ $em->id }}" @selected(($empresaId ?? null) == $em->id)>{{ $em->razon_social }}</option>
-            @endforeach
-          </select>
-        </div>
-      @endif
+      <select name="categoria_id" class="rounded-lg border-gray-300">
+        <option value="">Categoría</option>
+        @foreach (($categorias ?? []) as $c)
+          <option value="{{ $c->id }}" @selected(request('categoria_id') == $c->id)>{{ $c->nombre }}</option>
+        @endforeach
+      </select>
 
-      <div>
-        <label class="block text-xs text-gray-600 mb-1">Categoría</label>
-        <select name="categoria_id" class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
-          <option value="">Todas</option>
-          @foreach ($categorias as $cat)
-            <option value="{{ $cat->id }}" @selected(($categoriaId ?? null) == $cat->id)>{{ $cat->nombre }}</option>
-          @endforeach
-        </select>
-      </div>
+      <select name="activo" class="rounded-lg border-gray-300">
+        <option value="">Estado</option>
+        <option value="1" @selected(request('activo')==='1')>Activo</option>
+        <option value="0" @selected(request('activo')==='0')>Inactivo</option>
+      </select>
 
-      <div>
-        <label class="block text-xs text-gray-600 mb-1">Activo</label>
-        <select name="activo" class="w-full h-10 rounded-lg border-gray-300 focus:ring-indigo-500 text-sm">
-          <option value="">Todos</option>
-          <option value="1" @selected(($activo ?? '')==='1')>Sí</option>
-          <option value="0" @selected(($activo ?? '')==='0')>No</option>
-        </select>
-      </div>
-
-      <div class="lg:col-span-6 flex items-end justify-end gap-2">
-        <button type="submit" class="h-10 px-4 rounded-lg bg-gray-900 text-white text-sm">Aplicar</button>
-        <a href="{{ route('productos.index') }}" class="h-10 px-4 rounded-lg border text-sm text-gray-700">Limpiar</a>
+      <div class="flex items-center justify-end">
+        <a href="{{ route('productos.index') }}" class="text-sm text-gray-600 hover:underline">Limpiar</a>
       </div>
     </form>
 
     {{-- Tabla --}}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="bg-gray-50 text-gray-700">
-            <tr>
-              <th class="px-4 py-3 text-left">Producto</th>
-              <th class="px-4 py-3 text-left">SKU</th>
-              <th class="px-4 py-3 text-left">Categoría</th>
-              <th class="px-4 py-3 text-left">Precio</th>
-              <th class="px-4 py-3 text-left">Stock</th>
-              <th class="px-4 py-3 text-left">Estado</th>
-              <th class="px-4 py-3 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            @forelse ($productos as $p)
-              <tr class="hover:bg-gray-50">
-                <td class="px-4 py-3 text-gray-900 font-medium">
-                  <a href="{{ route('productos.show', $p) }}" class="hover:underline">{{ $p->nombre }}</a>
-                </td>
-                <td class="px-4 py-3 text-gray-700">{{ $p->sku ?: '—' }}</td>
-                <td class="px-4 py-3 text-gray-700">{{ $p->categoria?->nombre ?: '—' }}</td>
-                <td class="px-4 py-3 text-gray-700">{{ number_format($p->precio, 2) }} {{ $p->moneda_venta }}</td>
-                <td class="px-4 py-3 text-gray-700">{{ $p->stock }}</td>
-                <td class="px-4 py-3">
-                  <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
-                    {{ $p->activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
-                    <span class="material-symbols-outlined mi text-sm">{{ $p->activo ? 'check' : 'block' }}</span>
-                    {{ $p->activo ? 'Activo' : 'Inactivo' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex justify-end gap-1">
-                    {{-- Ver --}}
-                    <a href="{{ route('productos.show', $p) }}"
-                       class="px-2.5 py-1.5 rounded-lg text-gray-700 hover:bg-gray-100" title="Ver">
-                      <span class="material-symbols-outlined mi text-base">visibility</span>
-                    </a>
-                    {{-- Editar --}}
-                    <a href="{{ route('productos.edit', $p) }}"
-                       class="px-2.5 py-1.5 rounded-lg text-gray-700 hover:bg-gray-100" title="Editar">
-                      <span class="material-symbols-outlined mi text-base">edit</span>
-                    </a>
-                    {{-- Eliminar --}}
-                    <form method="POST" action="{{ route('productos.destroy', $p) }}"
-                          onsubmit="return confirm('¿Eliminar producto?');">
-                      @csrf @method('DELETE')
-                      <button type="submit" class="px-2.5 py-1.5 rounded-lg text-red-700 hover:bg-red-50" title="Eliminar">
-                        <span class="material-symbols-outlined mi text-base">delete</span>
-                      </button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-            @empty
-              <tr>
-                <td colspan="7" class="px-4 py-8 text-center text-gray-500">No hay productos registrados.</td>
-              </tr>
-            @endforelse
-          </tbody>
-        </table>
-      </div>
+    <div class="bg-white rounded-xl border overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50 text-gray-700">
+          <tr>
+            <th class="px-4 py-3 text-left">SKU</th>
+            <th class="px-4 py-3 text-left">Producto</th>
+            <th class="px-4 py-3 text-left">Categoría</th>
+            <th class="px-4 py-3 text-right">Precio</th>
+            <th class="px-4 py-3 text-right">Stock</th>
+            <th class="px-4 py-3 text-left">Estado</th>
+            <th class="px-4 py-3 text-right">Acciones</th>
+          </tr>
+        </thead>
 
-      <div class="px-4 py-3 border-t border-gray-100 bg-white">
-        {{ $productos->onEachSide(1)->links() }}
-      </div>
+        <tbody class="divide-y divide-gray-100">
+          @forelse ($productos as $p)
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-3 text-gray-700">{{ $p->sku ?: '—' }}</td>
+              <td class="px-4 py-3 font-medium text-gray-900">
+                <a href="{{ route('productos.show', $p) }}" class="hover:underline">{{ $p->nombre }}</a>
+              </td>
+              <td class="px-4 py-3 text-gray-700">{{ $p->categoria?->nombre ?: '—' }}</td>
+              <td class="px-4 py-3 text-right text-gray-700">
+                {{ number_format($p->precio, 2) }} {{ $p->moneda_venta ?? 'MXN' }}
+              </td>
+              <td class="px-4 py-3 text-right text-gray-700">{{ number_format($p->stock, 2) }}</td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
+                  {{ $p->activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                  {{ $p->activo ? 'Activo' : 'Inactivo' }}
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex justify-end gap-2">
+                  {{-- Ver --}}
+                  <a href="{{ route('productos.show', $p) }}"
+                     class="inline-flex items-center gap-1 text-cyan-700 hover:underline">
+                    <span class="material-symbols-outlined mi text-base">visibility</span> Ver
+                  </a>
+
+                  {{-- Editar --}}
+                  <a href="{{ route('productos.edit', $p) }}"
+                     class="inline-flex items-center gap-1 text-gray-700 hover:underline">
+                    <span class="material-symbols-outlined mi text-base">edit</span> Editar
+                  </a>
+
+                  {{-- Abastecer / Reabastecer --}}
+                  <a href="{{ route('compras.create', ['producto_id' => $p->id, 'cantidad' => 1]) }}"
+                     class="inline-flex items-center gap-1 text-white bg-cyan-600 hover:bg-cyan-700 rounded-lg px-3 py-1.5"
+                     title="Crear compra con este producto">
+                    <span class="material-symbols-outlined mi text-base">inventory_2</span>
+                    Abastecer
+                  </a>
+                </div>
+              </td>
+            </tr>
+          @empty
+            <tr>
+              <td colspan="7" class="px-4 py-10">
+                <div class="text-center text-gray-500">
+                  No hay productos para mostrar.
+                  <div class="mt-3">
+                    <a href="{{ route('productos.create') }}"
+                       class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-gray-800 text-white text-sm hover:bg-gray-900">
+                      <span class="material-symbols-outlined mi text-base">add</span>
+                      Crear producto
+                    </a>
+                    <a href="{{ route('compras.create') }}"
+                       class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-cyan-600 text-white text-sm hover:bg-cyan-700 ml-2">
+                      <span class="material-symbols-outlined mi text-base">shopping_cart</span>
+                      Crear compra
+                    </a>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          @endforelse
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      {{ $productos->links() }}
     </div>
   </div>
 </x-app-layout>

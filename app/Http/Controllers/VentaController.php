@@ -118,10 +118,12 @@ class VentaController extends Controller
             ? Empresa::orderBy('razon_social')->get(['id','razon_social','nombre_comercial'])
             : collect();
 
+        // 🔧 productos usa id_empresa (NO empresa_id)
         $productos = $empresaId
-            ? Producto::where('empresa_id', $empresaId)->orderBy('nombre')->get(['id','nombre','precio','stock'])
+            ? Producto::where('id_empresa', $empresaId)->orderBy('nombre')->get(['id','nombre','precio','stock'])
             : collect();
 
+        // clientes (mantengo empresa_id como ya lo tienes en tu esquema)
         $clientes = $empresaId
             ? Cliente::where('empresa_id', $empresaId)->orderBy('nombre')->get(['id','nombre','razon_social'])
             : collect();
@@ -155,7 +157,7 @@ class VentaController extends Controller
             'items'                       => ['required','array','min:1'],
             'items.*.producto_id'         => ['required','integer','exists:productos,id'],
             'items.*.cantidad'            => ['required','numeric','min:0.01'],
-            'items.*.precio_unitario'     => ['required','numeric','min:0'],
+            // precio_unitario ya NO se valida ni se acepta del request
             'items.*.descuento'           => ['nullable','numeric','min:0'],
         ], [
             'empresa_id.required' => 'Selecciona la empresa.',
@@ -248,7 +250,8 @@ class VentaController extends Controller
             ? Empresa::orderBy('razon_social')->get(['id','razon_social','nombre_comercial'])
             : collect();
 
-        $productos = Producto::where('empresa_id', $empresaId)->orderBy('nombre')->get(['id','nombre','precio','stock']);
+        // 🔧 productos usa id_empresa (NO empresa_id)
+        $productos = Producto::where('id_empresa', $empresaId)->orderBy('nombre')->get(['id','nombre','precio','stock']);
         $clientes  = Cliente::where('empresa_id', $empresaId)->orderBy('nombre')->get(['id','nombre','razon_social']);
         $responsables = User::where('id_empresa', $empresaId)
             ->role(['vendedor','gerente','administrador_empresa','superadmin'])
@@ -282,7 +285,7 @@ class VentaController extends Controller
             'items'                       => ['required','array','min:1'],
             'items.*.producto_id'         => ['required','integer','exists:productos,id'],
             'items.*.cantidad'            => ['required','numeric','min:0.01'],
-            'items.*.precio_unitario'     => ['required','numeric','min:0'],
+            // precio_unitario ya NO se acepta del request
             'items.*.descuento'           => ['nullable','numeric','min:0'],
         ], [
             'items.required' => 'Agrega al menos un producto.',
@@ -395,7 +398,8 @@ class VentaController extends Controller
 
             foreach ($venta->detalle as $d) {
                 $prod = $d->producto;
-                if (!$prod || (int)$prod->empresa_id !== (int)$venta->empresa_id) {
+                // 🔧 producto compara con id_empresa
+                if (!$prod || (int)$prod->id_empresa !== (int)$venta->empresa_id) {
                     DB::rollBack();
                     return back()->withErrors("Una línea tiene producto de otra empresa.");
                 }
@@ -489,6 +493,11 @@ class VentaController extends Controller
         }
     }
 
+    /**
+     * Calcula totales tomando SIEMPRE el precio del producto.
+     * Ignora cualquier precio recibido desde el request.
+     * Valida stock opcionalmente (al facturar).
+     */
     private function validarYCalcularItems(array $items, int $empresaId, bool $needStock = false): array
     {
         $subtotal = 0.0;
@@ -497,25 +506,29 @@ class VentaController extends Controller
         foreach ($items as $row) {
             $pid  = (int) ($row['producto_id'] ?? 0);
             $cant = (float) ($row['cantidad'] ?? 0);
-            $pu   = (float) ($row['precio_unitario'] ?? 0);
             $desc = (float) ($row['descuento'] ?? 0);
 
-            $prod = Producto::where('id', $pid)->where('empresa_id', $empresaId)->first();
+            // 🔧 productos usa id_empresa (NO empresa_id)
+            $prod = Producto::where('id', $pid)->where('id_empresa', $empresaId)->first();
             if (!$prod) {
                 return ['error' => "El producto seleccionado no pertenece a la empresa.", 'rows' => [], 'subtotal' => 0, 'iva' => 0, 'total' => 0];
             }
             if ($needStock && $prod->stock < $cant) {
                 return ['error' => "Stock insuficiente para {$prod->nombre}. Disponible: {$prod->stock}", 'rows' => [], 'subtotal' => 0, 'iva' => 0, 'total' => 0];
             }
-            if ($pu <= 0) $pu = (float) $prod->precio;
 
-            $linea = max(($cant * $pu) - $desc, 0);
+            $pu = (float) $prod->precio;
+            if ($pu <= 0) {
+                return ['error' => "El producto '{$prod->nombre}' no tiene precio configurado (> 0).", 'rows' => [], 'subtotal' => 0, 'iva' => 0, 'total' => 0];
+            }
+
+            $linea    = max(($cant * $pu) - $desc, 0);
             $subtotal += $linea;
 
             $rows[] = [
                 'producto_id'     => $pid,
                 'cantidad'        => $cant,
-                'precio_unitario' => $pu,
+                'precio_unitario' => $pu,     // ← se congela el precio del producto aquí
                 'descuento'       => $desc,
                 'total_linea'     => $linea,
             ];
@@ -525,7 +538,7 @@ class VentaController extends Controller
         $total = round($subtotal + $iva, 2);
 
         return ['error' => null, 'rows' => $rows, 'subtotal' => $subtotal, 'iva' => $iva, 'total' => $total];
-        }
+    }
 
     private function safeEmpresaForRedirect(User $user, int $empresaId): int
     {

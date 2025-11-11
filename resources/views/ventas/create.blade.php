@@ -131,10 +131,13 @@
                     <tr>
                       <td class="px-3 py-2">
                         <select :name="`items[${idx}][producto_id]`" x-model.number="row.producto_id"
-                                class="w-full h-10 rounded-lg border-gray-300">
+                                class="w-full h-10 rounded-lg border-gray-300"
+                                @change="syncPrice(idx)">
                           <option value="">Selecciona…</option>
                           @foreach ($productos as $p)
-                            <option value="{{ $p->id }}">{{ $p->nombre }} — ${{ number_format($p->precio,2) }} (Stock: {{ $p->stock }})</option>
+                            <option value="{{ $p->id }}">
+                              {{ $p->nombre }} — ${{ number_format($p->precio,2) }} (Stock: {{ $p->stock }})
+                            </option>
                           @endforeach
                         </select>
                       </td>
@@ -143,10 +146,9 @@
                                :name="`items[${idx}][cantidad]`"
                                class="w-28 h-10 rounded-lg border-gray-300 text-right">
                       </td>
-                      <td class="px-3 py-2">
-                        <input type="number" step="0.01" min="0" x-model.number="row.precio_unitario"
-                               :name="`items[${idx}][precio_unitario]`"
-                               class="w-28 h-10 rounded-lg border-gray-300 text-right">
+                      <td class="px-3 py-2 text-right">
+                        {{-- Precio unitario solo lectura, tomado del producto --}}
+                        <span x-text="formatMoney(unitPrice(row.producto_id))"></span>
                       </td>
                       <td class="px-3 py-2">
                         <input type="number" step="0.01" min="0" x-model.number="row.descuento"
@@ -213,17 +215,39 @@
 
   {{-- Alpine helpers --}}
   <script>
+    // Mapa de productos → precio/stock para cálculos UI
+    const PRODUCTS = @json(
+      $productos->mapWithKeys(fn($p) => [
+        $p->id => ['precio' => (float)$p->precio, 'stock' => (float)$p->stock, 'nombre' => $p->nombre]
+      ])
+    );
+
     function ventaItems() {
       return {
         estatus: 'prefactura',
-        rows: [{ producto_id: '', cantidad: 1, precio_unitario: 0, descuento: 0 }],
-        addRow() { this.rows.push({ producto_id: '', cantidad: 1, precio_unitario: 0, descuento: 0 }); },
+        rows: [{ producto_id: '', cantidad: 1, descuento: 0 }],
+
+        addRow() { this.rows.push({ producto_id: '', cantidad: 1, descuento: 0 }); },
         removeRow(i) { this.rows.splice(i, 1); },
-        lineTotal(r) { const t = (r.cantidad * r.precio_unitario) - (r.descuento || 0); return t > 0 ? t : 0; },
+
+        unitPrice(pid) {
+          const p = PRODUCTS[pid];
+          return p ? (p.precio || 0) : 0;
+        },
+        lineTotal(r) {
+          const pu = this.unitPrice(r.producto_id);
+          const t  = (r.cantidad * pu) - (r.descuento || 0);
+          return t > 0 ? t : 0;
+        },
         subtotal() { return this.rows.reduce((s, r) => s + this.lineTotal(r), 0); },
         iva() { return +(this.subtotal() * 0.16).toFixed(2); },
         total() { return +(this.subtotal() + this.iva()).toFixed(2); },
-        formatMoney(n) { return (n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }); }
+        formatMoney(n) { return (n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }); },
+
+        syncPrice(idx) {
+          // No hace nada más que disparar recomputo; el precio SIEMPRE viene del producto
+          this.rows[idx].descuento = this.rows[idx].descuento || 0;
+        }
       }
     }
   </script>

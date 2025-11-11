@@ -5,10 +5,13 @@
         <span class="material-symbols-outlined mi">receipt_long</span>
         Venta #{{ $venta->id }}
       </h1>
-      <div class="flex items-center gap-2">
+
+      {{-- Acciones superiores --}}
+      <div class="flex items-center gap-2 print:hidden">
         @if(in_array($venta->estatus, ['borrador','prefactura']))
-          <form method="POST" action="{{ route('ventas.convertirPrefactura', $venta) }}"
-                onsubmit="return confirm('¿Convertir a venta facturada?');">
+          <form method="POST"
+                action="{{ route('ventas.convertirPrefactura', $venta) }}"
+                onsubmit="return confirm('¿Convertir a venta facturada y descontar stock?');">
             @csrf
             <button class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700">
               <span class="material-symbols-outlined mi text-base">task_alt</span>
@@ -16,6 +19,21 @@
             </button>
           </form>
         @endif
+
+        {{-- Descargar PDF --}}
+        <a href="{{ route('ventas.pdf', $venta) }}"
+           target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
+          <span class="material-symbols-outlined mi text-base">picture_as_pdf</span>
+          PDF
+        </a>
+
+        {{-- Imprimir (navegador) --}}
+        <button type="button" onclick="window.print()"
+                class="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
+          <span class="material-symbols-outlined mi text-base">print</span>
+          Imprimir
+        </button>
 
         @if($venta->estatus !== 'cancelada')
           <a href="{{ route('ventas.edit', $venta) }}"
@@ -35,6 +53,7 @@
   </x-slot>
 
   <div class="max-w-6xl mx-auto space-y-6">
+    {{-- Mensajes --}}
     @if (session('status'))
       <div class="rounded-lg bg-green-50 text-green-800 ring-1 ring-green-200 p-3">{{ session('status') }}</div>
     @endif
@@ -53,15 +72,22 @@
         </div>
         <div>
           <div class="text-xs text-gray-500">Fecha</div>
-          <div class="font-medium">{{ \Illuminate\Support\Carbon::parse($venta->fecha_venta)->format('d/m/Y') }}</div>
+          <div class="font-medium">
+            {{ \Illuminate\Support\Carbon::parse($venta->fecha_venta)->format('d/m/Y') }}
+          </div>
         </div>
         <div>
           <div class="text-xs text-gray-500">Vendedor</div>
-          <div class="font-medium">{{ $venta->usuario?->nombre }} {{ $venta->usuario?->apellido_paterno }}</div>
+          <div class="font-medium">
+            {{ $venta->usuario?->nombre }} {{ $venta->usuario?->apellido_paterno }}
+          </div>
         </div>
+
         <div>
           <div class="text-xs text-gray-500">Cliente</div>
-          <div class="font-medium">{{ $venta->cliente?->nombre ?? $venta->cliente?->razon_social ?? 'Venta directa' }}</div>
+          <div class="font-medium">
+            {{ $venta->cliente?->nombre ?? $venta->cliente?->razon_social ?? 'Venta directa' }}
+          </div>
         </div>
         <div>
           <div class="text-xs text-gray-500">Estatus</div>
@@ -105,15 +131,21 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            @foreach ($venta->detalle as $d)
+            @forelse ($venta->detalle as $d)
               <tr>
-                <td class="px-3 py-2">{{ $d->producto?->nombre ?? 'Producto #'.$d->producto_id }}</td>
+                <td class="px-3 py-2">{{ $d->producto?->nombre ?? ('Producto #'.$d->producto_id) }}</td>
                 <td class="px-3 py-2 text-right">{{ number_format($d->cantidad, 2) }}</td>
                 <td class="px-3 py-2 text-right">${{ number_format($d->precio_unitario, 2) }}</td>
                 <td class="px-3 py-2 text-right">${{ number_format($d->descuento ?? 0, 2) }}</td>
                 <td class="px-3 py-2 text-right font-medium">${{ number_format($d->total_linea, 2) }}</td>
               </tr>
-            @endforeach
+            @empty
+              <tr>
+                <td colspan="5" class="px-3 py-6 text-center text-gray-500">
+                  No hay partidas capturadas en esta venta.
+                </td>
+              </tr>
+            @endforelse
           </tbody>
           <tfoot class="bg-gray-50">
             <tr>
@@ -137,10 +169,11 @@
     </div>
 
     {{-- Acciones inferiores --}}
-    <div class="flex items-center justify-end gap-2">
+    <div class="flex items-center justify-end gap-2 print:hidden">
       @if(in_array($venta->estatus, ['borrador','prefactura']))
-        <form method="POST" action="{{ route('ventas.convertirPrefactura', $venta) }}"
-              onsubmit="return confirm('¿Convertir a venta facturada?');">
+        <form method="POST"
+              action="{{ route('ventas.convertirPrefactura', $venta) }}"
+              onsubmit="return confirm('¿Convertir a venta facturada y descontar stock?');">
           @csrf
           <button class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700">
             <span class="material-symbols-outlined mi text-base">task_alt</span>
@@ -148,6 +181,20 @@
           </button>
         </form>
       @endif
+
+      <a href="{{ route('ventas.pdf', $venta) }}"
+         target="_blank" rel="noopener"
+         class="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
+        <span class="material-symbols-outlined mi text-base">picture_as_pdf</span>
+        PDF
+      </a>
+
+      <button type="button" onclick="window.print()"
+              class="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
+        <span class="material-symbols-outlined mi text-base">print</span>
+        Imprimir
+      </button>
+
       @if($venta->estatus !== 'cancelada')
         <a href="{{ route('ventas.edit', $venta) }}"
            class="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-gray-300 text-gray-700 text-sm hover:bg-gray-50">
@@ -155,9 +202,11 @@
           Editar
         </a>
       @endif
+
       <form method="POST" action="{{ route('ventas.destroy', $venta) }}"
             onsubmit="return confirm('¿Eliminar esta venta?');">
-        @csrf @method('DELETE')
+        @csrf
+        @method('DELETE')
         <button class="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-red-700 border border-red-300 hover:bg-red-50">
           <span class="material-symbols-outlined mi text-base">delete</span>
           Eliminar
@@ -165,4 +214,13 @@
       </form>
     </div>
   </div>
+
+  {{-- Estilos de impresión: oculta botones/headers --}}
+  <style>
+    @media print {
+      header, .print\:hidden, .mi { display: none !important; }
+      a[href]:after { content: ""; }
+      body { color: #111; }
+    }
+  </style>
 </x-app-layout>

@@ -49,4 +49,10 @@ class Producto extends Model
             }
         });
     }
+
+    public function detallesCompra()
+    {
+        return $this->hasMany(DetalleCompra::class, 'id_producto');
+    }
+
 }

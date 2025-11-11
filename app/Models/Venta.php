@@ -3,7 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\{BelongsTo, HasMany};
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Venta extends Model
 {
@@ -23,43 +24,32 @@ class Venta extends Model
 
     protected $casts = [
         'fecha_venta' => 'date',
-        'subtotal' => 'decimal:2',
-        'iva' => 'decimal:2',
-        'total' => 'decimal:2',
+        'subtotal'    => 'decimal:2',
+        'iva'         => 'decimal:2',
+        'total'       => 'decimal:2',
     ];
 
+    /** Relación con detalle_ventas (el controlador usa `detalle`) */
+    public function detalle(): HasMany
+    {
+        return $this->hasMany(DetalleVenta::class, 'venta_id');
+    }
+
+    /** Empresa */
     public function empresa(): BelongsTo
     {
-        return $this->belongsTo(Empresa::class);
+        return $this->belongsTo(Empresa::class, 'empresa_id');
     }
 
-    public function cliente(): BelongsTo
-    {
-        return $this->belongsTo(Cliente::class);
-    }
-
+    /** Vendedor/usuario responsable */
     public function usuario(): BelongsTo
     {
         return $this->belongsTo(User::class, 'usuario_id');
     }
 
-    public function detalles(): HasMany
+    /** Cliente */
+    public function cliente(): BelongsTo
     {
-        return $this->hasMany(DetalleVenta::class);
-    }
-
-    public function scopeDeEmpresa($query, int $empresaId)
-    {
-        return $query->where('empresa_id', $empresaId);
-    }
-
-    public function esPrefactura(): bool
-    {
-        return $this->estatus === 'prefactura';
-    }
-
-    public function esFacturada(): bool
-    {
-        return $this->estatus === 'facturada';
+        return $this->belongsTo(Cliente::class, 'cliente_id');
     }
 }

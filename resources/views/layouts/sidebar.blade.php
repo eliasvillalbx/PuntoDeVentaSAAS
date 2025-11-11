@@ -1,7 +1,8 @@
 {{-- resources/views/layouts/sidebar.blade.php --}}
 @php
   $isActive = fn ($pattern) => request()->routeIs($pattern);
-  $isVentasActive = $isActive('ventas.index') || $isActive('ventas.show') || $isActive('ventas.edit') || $isActive('ventas.create');
+  $isVentasActive  = $isActive('ventas.index')  || $isActive('ventas.show')  || $isActive('ventas.edit')  || $isActive('ventas.create');
+  $isComprasActive = $isActive('compras.index') || $isActive('compras.show') || $isActive('compras.edit') || $isActive('compras.create');
   $kpis = [
     'prefacturasPendientes' => $prefacturasPendientes ?? null,
   ];
@@ -9,13 +10,16 @@
 
 <aside
   x-data="{
-    open: JSON.parse(localStorage.getItem('sb_open') || '{}') || {
-      general:true,
-      personas:true,
-      catalogo:true,
-      ventas:true,
-      facturacion:true,
-      admin:true,
+    open: (JSON.parse(localStorage.getItem('sb_open') || '{}')) || {},
+    init(){
+      // Defaults seguros
+      this.open.general      ??= true;
+      this.open.personas     ??= true;
+      this.open.catalogo     ??= true;
+      this.open.compras      ??= true;   // ⬅️ NUEVO
+      this.open.ventas       ??= true;
+      this.open.facturacion  ??= true;
+      this.open.admin        ??= true;
     },
     persist(){ localStorage.setItem('sb_open', JSON.stringify(this.open)); }
   }"
@@ -38,24 +42,19 @@
 
       {{-- ===================== GENERAL ===================== --}}
       <section class="space-y-1">
-        {{-- Encabezado SIEMPRE visible (ícono al colapsar) --}}
         <button type="button"
                 class="group w-full flex items-center gap-2 rounded-lg text-[11px] font-semibold tracking-wide
                        text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2"
                 :class="!sidebarOpen ? 'justify-center' : ''"
                 @click="open.general = !open.general"
-                :aria-expanded="open.general.toString()"
+                :aria-expanded="String(!!open.general)"
                 aria-controls="sec-general"
                 title="General">
           <span class="material-symbols-outlined mi text-base">dashboard</span>
           <span class="uppercase" x-show="sidebarOpen" x-transition>GENERAL</span>
-
-          {{-- chevron sólo cuando está expandido --}}
           <span class="ml-auto material-symbols-outlined mi text-sm transition-transform"
                 x-show="sidebarOpen"
                 :class="open.general ? 'rotate-0' : '-rotate-90'">expand_more</span>
-
-          {{-- Tooltip cuando está colapsado --}}
           <span x-show="!sidebarOpen"
                 class="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-md opacity-0 group-hover:opacity-100">
             General
@@ -91,7 +90,7 @@
                        text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2"
                 :class="!sidebarOpen ? 'justify-center' : ''"
                 @click="open.personas = !open.personas"
-                :aria-expanded="open.personas.toString()"
+                :aria-expanded="String(!!open.personas)"
                 aria-controls="sec-personas"
                 title="Personas">
           <span class="material-symbols-outlined mi text-base">group</span>
@@ -144,7 +143,7 @@
                        text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2"
                 :class="!sidebarOpen ? 'justify-center' : ''"
                 @click="open.catalogo = !open.catalogo"
-                :aria-expanded="open.catalogo.toString()"
+                :aria-expanded="String(!!open.catalogo)"
                 aria-controls="sec-catalogo"
                 title="Catálogo">
           <span class="material-symbols-outlined mi text-base">inventory</span>
@@ -189,6 +188,49 @@
       </section>
       @endif
 
+      {{-- ===================== COMPRAS ===================== --}}
+      @if(auth()->user()?->hasAnyRole(['superadmin','administrador_empresa','gerente']))
+      <section class="space-y-1">
+        <button type="button"
+                class="group w-full flex items-center gap-2 rounded-lg text-[11px] font-semibold tracking-wide
+                       text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2"
+                :class="!sidebarOpen ? 'justify-center' : ''"
+                @click="open.compras = !open.compras"
+                :aria-expanded="String(!!open.compras)"
+                aria-controls="sec-compras"
+                title="Compras">
+          <span class="material-symbols-outlined mi text-base">local_mall</span>
+          <span class="uppercase" x-show="sidebarOpen" x-transition>COMPRAS</span>
+          <span class="ml-auto material-symbols-outlined mi text-sm transition-transform"
+                x-show="sidebarOpen"
+                :class="open.compras ? 'rotate-0' : '-rotate-90'">expand_more</span>
+          <span x-show="!sidebarOpen"
+                class="pointer-events-none absolute left-14 z-50 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-md opacity-0 group-hover:opacity-100">
+            Compras
+          </span>
+        </button>
+
+        <div id="sec-compras" x-show="open.compras" x-collapse class="space-y-1" x-cloak>
+          <a href="{{ route('compras.index') }}"
+             class="group relative flex items-center gap-3 px-3 py-2 rounded-lg {{ $isComprasActive ? 'bg-gray-100 text-gray-900 ring-1 ring-gray-200' : 'text-gray-700 hover:bg-gray-50' }}"
+             title="Compras" aria-current="{{ $isComprasActive ? 'page' : 'false' }}">
+            @if($isComprasActive)<span class="absolute left-0 top-1 bottom-1 w-1 bg-indigo-600 rounded-r"></span>@endif
+            <span class="material-symbols-outlined mi">inventory</span>
+            <span class="text-sm font-medium" x-show="sidebarOpen" x-transition>Compras</span>
+            <span x-show="!sidebarOpen" class="pointer-events-none absolute left-14 z-50 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-md opacity-0 group-hover:opacity-100">Compras</span>
+          </a>
+
+          <a href="{{ route('compras.create') }}"
+             class="group relative flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50"
+             title="Nueva compra">
+            <span class="material-symbols-outlined mi">add_shopping_cart</span>
+            <span class="text-sm font-medium" x-show="sidebarOpen" x-transition>Nueva compra</span>
+            <span x-show="!sidebarOpen" class="pointer-events-none absolute left-14 z-50 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 shadow-md opacity-0 group-hover:opacity-100">Nueva compra</span>
+          </a>
+        </div>
+      </section>
+      @endif
+
       {{-- ===================== VENTAS ===================== --}}
       @if(auth()->user()?->hasAnyRole(['superadmin','administrador_empresa','gerente','vendedor']))
       <section class="space-y-1">
@@ -197,7 +239,7 @@
                        text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2"
                 :class="!sidebarOpen ? 'justify-center' : ''"
                 @click="open.ventas = !open.ventas"
-                :aria-expanded="open.ventas.toString()"
+                :aria-expanded="String(!!open.ventas)"
                 aria-controls="sec-ventas"
                 title="Ventas">
           <span class="material-symbols-outlined mi text-base">shopping_bag</span>
@@ -254,7 +296,7 @@
                        text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2"
                 :class="!sidebarOpen ? 'justify-center' : ''"
                 @click="open.facturacion = !open.facturacion"
-                :aria-expanded="open.facturacion.toString()"
+                :aria-expanded="String(!!open.facturacion)"
                 aria-controls="sec-facturacion"
                 title="Facturación">
           <span class="material-symbols-outlined mi text-base">payments</span>
@@ -288,7 +330,7 @@
                        text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2"
                 :class="!sidebarOpen ? 'justify-center' : ''"
                 @click="open.admin = !open.admin"
-                :aria-expanded="open.admin.toString()"
+                :aria-expanded="String(!!open.admin)"
                 aria-controls="sec-admin"
                 title="Administración">
           <span class="material-symbols-outlined mi text-base">admin_panel_settings</span>

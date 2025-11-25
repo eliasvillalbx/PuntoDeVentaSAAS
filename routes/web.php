@@ -20,6 +20,10 @@ use App\Http\Controllers\VentaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CompraController;
 
+// NUEVOS controladores para billing / Clip
+use App\Http\Controllers\BillingController;
+use App\Http\Controllers\ClipWebhookController;
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -43,6 +47,15 @@ Route::get('/', function () {
 /* ==================== AUTH (Breeze) ==================== */
 require __DIR__ . '/auth.php';
 
+/* ==================== Webhook Clip (sin auth, sin CSRF) ==================== */
+/**
+ * Este endpoint lo configura Clip como webhook de Checkout.
+ * No lleva auth de Laravel ni CSRF, porque lo llama el servidor de Clip.
+ */
+Route::post('/clip/webhook', [ClipWebhookController::class, 'handle'])
+    ->name('clip.webhook')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
 /* ==================== RUTAS PROTEGIDAS (auth) ==================== */
 Route::middleware(['auth'])->group(function () {
 
@@ -50,14 +63,19 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
 
     /* ---------- Billing / Suscripciones básicas (sin bloqueo de suscripción) ---------- */
-    // Pantalla de aviso de pago
-    Route::get('/billing/alert', fn () => view('billing.alert'))->name('billing.alert');
+    // Pantalla de aviso de pago (usa BillingController@alert)
+    Route::get('/billing/alert', [BillingController::class, 'alert'])
+        ->name('billing.alert');
 
-    // Activar suscripción tras pago (alta)
+    // Crear checkout Clip (botón "Pagar con Clip" en billing.alert)
+    Route::post('/billing/checkout', [BillingController::class, 'createCheckout'])
+        ->name('billing.clip.checkout');
+
+    // Activar suscripción tras pago manual (alta directa usando tu controlador actual)
     Route::post('/suscripciones', [SuscripcionController::class, 'store'])
         ->name('suscripciones.store');
 
-    // Renovar suscripción vencida (tras pago)
+    // Renovar suscripción vencida (tras pago manual)
     Route::post('/suscripciones/{suscripcion}/renew', [SuscripcionController::class, 'renew'])
         ->name('suscripciones.renew');
 
@@ -186,4 +204,7 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('clientes', ClienteController::class);
     });
 
+   
 });
+ Route::post('/webhooks/clip-checkout', [ClipWebhookController::class, 'handle'])
+    ->name('clip.webhook');

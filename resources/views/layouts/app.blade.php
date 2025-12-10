@@ -110,6 +110,11 @@
       </div>
     </div>
 
+    {{-- WIDGET GLOBAL DE CHAT (solo para usuarios autenticados) --}}
+    @auth
+      @include('chat.widget')
+    @endauth
+
     {{-- Alpine helpers --}}
     <script>
       function layoutState() {

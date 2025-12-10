@@ -19,6 +19,8 @@ use App\Http\Controllers\ProductoProveedorController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CompraController;
+use App\Http\Controllers\ChatController;
+
 
 // NUEVOS controladores para billing / Clip
 use App\Http\Controllers\BillingController;
@@ -165,6 +167,20 @@ Route::middleware(['auth'])->group(function () {
      * ========================================================================= */
     Route::middleware(['suscripcion.activa'])->group(function () {
 
+
+
+        // ==================== CHAT EMPRESARIAL ====================
+        Route::get('/chat', [ChatController::class, 'index'])
+            ->name('chat.index');
+
+        Route::post('/chat/conversations', [ChatController::class, 'storeConversation'])
+            ->name('chat.conversations.store');
+
+        Route::get('/chat/conversations/{conversation}/messages', [ChatController::class, 'messages'])
+            ->name('chat.messages.index');
+
+        Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'sendMessage'])
+            ->name('chat.messages.store');
         // Compras (operativas)
         Route::resource('compras', CompraController::class);
         Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])

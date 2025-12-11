@@ -25,14 +25,20 @@
     $u = auth()->user();
     $isSuperAdmin = $u && method_exists($u, 'hasRole') ? $u->hasRole('superadmin') : false;
 
-    // Ajusta a tu relación real (si usas "región", cambia aquí):
-    $empresaNombre = !$isSuperAdmin ? (string) data_get($u, 'empresa.nombre', '') : '';
+    // Empresa (usa accessor display_name y logo_url del modelo Empresa)
+    $empresaNombre = !$isSuperAdmin ? (string) data_get($u, 'empresa.display_name', '') : '';
     $empresaLogo   = !$isSuperAdmin ? data_get($u, 'empresa.logo_url') : null;
 
+    // Avatar de usuario
     $userAvatar = data_get($u, 'avatar_url');
     $userInitials = function($name) {
         $parts = preg_split('/\s+/', trim($name ?? '')); $ini = '';
-        foreach ($parts as $p) { if ($p !== '') { $ini .= mb_strtoupper(mb_substr($p,0,1)); } if (mb_strlen($ini)>=2) break; }
+        foreach ($parts as $p) {
+            if ($p !== '') {
+                $ini .= mb_strtoupper(mb_substr($p,0,1));
+            }
+            if (mb_strlen($ini) >= 2) break;
+        }
         return $ini !== '' ? $ini : 'U';
     };
   @endphp
@@ -124,8 +130,12 @@
 
           init() {
             const saved = localStorage.getItem('sidebarOpen');
-            if (saved !== null) { try { this.sidebarOpen = JSON.parse(saved); } catch(_) {} }
-            window.addEventListener('keydown', e => { if (e.key === 'Escape') this.profileOpen = false; });
+            if (saved !== null) {
+              try { this.sidebarOpen = JSON.parse(saved); } catch(_) {}
+            }
+            window.addEventListener('keydown', e => {
+              if (e.key === 'Escape') this.profileOpen = false;
+            });
           },
 
           toggleSidebar() {

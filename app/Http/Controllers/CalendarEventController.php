@@ -5,16 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\CalendarEvent;
 use App\Models\Empresa;
 use App\Models\User;
+use App\Notifications\CalendarEventAssigned;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class CalendarEventController extends Controller
 {
     public function __construct()
     {
-        // Pon tus middlewares si los usas
         //$this->middleware(['auth', 'verified']);
     }
 
@@ -45,6 +46,41 @@ class CalendarEventController extends Controller
         return false;
     }
 
+    /**
+     * Envía notificaciones a todos los usuarios asignados a un evento.
+     */
+    protected function notifyAssignedUsers(CalendarEvent $event, string $action): void
+    {
+        try {
+            $event->loadMissing('assignedUsers', 'empresa', 'creator');
+
+            if ($event->assignedUsers->isEmpty()) {
+                Log::info('Evento sin usuarios asignados, no se envían notificaciones.', [
+                    'event_id' => $event->id,
+                    'action'   => $action,
+                ]);
+                return;
+            }
+
+            Log::info('Enviando notificaciones de evento de calendario.', [
+                'event_id'  => $event->id,
+                'action'    => $action,
+                'user_ids'  => $event->assignedUsers->pluck('id')->all(),
+            ]);
+
+            Notification::send(
+                $event->assignedUsers,
+                new CalendarEventAssigned($event, $action)
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Error al enviar notificaciones de evento de calendario.', [
+                'event_id' => $event->id ?? null,
+                'action'   => $action,
+                'error'    => $e->getMessage(),
+            ]);
+        }
+    }
+
     // === Vista principal ===
 
     public function index(Request $request)
@@ -64,12 +100,12 @@ class CalendarEventController extends Controller
             ? Empresa::orderBy('nombre_comercial')->get()
             : ($empresa ? collect([$empresa]) : collect());
 
-        // Usuarios de la empresa para las casillas
+        // Usuarios de la empresa para casillas del modal
         $usuariosEmpresa = $empresaId
             ? User::where('id_empresa', $empresaId)->orderBy('nombre')->get()
             : collect();
 
-        $canManage = $this->canManageEmpresaEvents($user);
+        $canManage     = $this->canManageEmpresaEvents($user);
         $empresaNombre = $empresa?->display_name ?? 'sin empresa asignada';
 
         return view('calendar.index', [
@@ -87,7 +123,7 @@ class CalendarEventController extends Controller
 
     public function events(Request $request): JsonResponse
     {
-        $user = Auth::user();
+        $user         = Auth::user();
         $isSuperAdmin = $this->isSuperAdmin($user);
 
         try {
@@ -130,7 +166,6 @@ class CalendarEventController extends Controller
                         'description'     => $ev->description,
                         'can_edit'        => $this->canEditEvent($user, $ev),
 
-                        // usuarios asignados (tabla pivote)
                         'assigned_users'    => $ev->assignedUsers->map(function (User $u) {
                             return [
                                 'id'     => $u->id,
@@ -186,12 +221,10 @@ class CalendarEventController extends Controller
                 'color'             => ['nullable', 'string', 'max:20'],
                 'empresa_id'        => ['nullable', 'integer', 'exists:empresas,id'],
 
-                // usuarios asignados (muchos a muchos)
                 'assigned_user_ids'   => ['nullable', 'array'],
                 'assigned_user_ids.*' => ['integer', 'exists:users,id'],
             ]);
 
-            // Empresa del evento
             if ($isSuperAdmin && !empty($validated['empresa_id'])) {
                 $empresaId = (int) $validated['empresa_id'];
             } else {
@@ -205,7 +238,6 @@ class CalendarEventController extends Controller
                 ], 400);
             }
 
-            // Filtrar usuarios asignados que pertenezcan a esa empresa
             $assignedIds = collect($validated['assigned_user_ids'] ?? [])
                 ->unique()
                 ->values();
@@ -218,7 +250,6 @@ class CalendarEventController extends Controller
                 $assignedIds = $assignedIds->intersect($validUserIds);
             }
 
-            // Responsable = quien lo crea
             $event = CalendarEvent::create([
                 'empresa_id'  => $empresaId,
                 'user_id'     => $user->id,   // responsable
@@ -231,10 +262,12 @@ class CalendarEventController extends Controller
                 'color'       => $validated['color'] ?? '#4f46e5',
             ]);
 
-            // Sincronizar asignados en la tabla pivote
             if ($assignedIds->isNotEmpty()) {
                 $event->assignedUsers()->sync($assignedIds->all());
             }
+
+            // 🔔 Notificar SIEMPRE que se crea (si hay asignados)
+            $this->notifyAssignedUsers($event, 'created');
 
             return response()->json([
                 'ok'    => true,
@@ -253,7 +286,7 @@ class CalendarEventController extends Controller
         }
     }
 
-    // === Actualizar evento (datos / drag / resize) ===
+    // === Actualizar evento ===
 
     public function update(Request $request, CalendarEvent $event): JsonResponse
     {
@@ -275,16 +308,14 @@ class CalendarEventController extends Controller
                 'all_day'           => ['sometimes', 'boolean'],
                 'color'             => ['sometimes', 'nullable', 'string', 'max:20'],
 
-                // usuarios asignados
                 'assigned_user_ids'   => ['sometimes', 'array'],
                 'assigned_user_ids.*' => ['integer', 'exists:users,id'],
             ]);
 
-            // Actualizar campos simples
             $event->fill($validated);
             $event->save();
 
-            // Si vienen usuarios asignados, actualizar pivot
+            // Actualizar asignados si los mandan
             if (array_key_exists('assigned_user_ids', $validated)) {
                 $assignedIds = collect($validated['assigned_user_ids'] ?? [])
                     ->unique()
@@ -298,8 +329,11 @@ class CalendarEventController extends Controller
                     $assignedIds = $assignedIds->intersect($validUserIds);
                 }
 
-                $event->assignedUsers()->sync($assignedIds->all());
+                $event->assignedUsers()->sync($assignedIds?->all() ?? []);
             }
+
+            // 🔔 Notificar SIEMPRE que se actualiza (drag, resize, edición)
+            $this->notifyAssignedUsers($event, 'updated');
 
             return response()->json([
                 'ok'    => true,
@@ -333,6 +367,9 @@ class CalendarEventController extends Controller
         }
 
         try {
+            // 🔔 Notificar ANTES de borrar (para que siga teniendo assignedUsers)
+            $this->notifyAssignedUsers($event, 'deleted');
+
             $event->delete();
 
             return response()->json([

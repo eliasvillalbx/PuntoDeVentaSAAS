@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Empresa extends Model
 {
@@ -60,6 +61,24 @@ class Empresa extends Model
     public function getDisplayNameAttribute(): string
     {
         return $this->nombre_comercial ?: $this->razon_social;
+    }
+
+    /**
+     * URL pública del logo (derivada de logo_path).
+     * Usa Storage::url(), así que asegúrate de tener bien configurado el disk.
+     */
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (!$this->logo_path) {
+            return null;
+        }
+
+        // Si logo_path ya es una URL absoluta, la regresamos tal cual
+        if (str_starts_with($this->logo_path, 'http://') || str_starts_with($this->logo_path, 'https://')) {
+            return $this->logo_path;
+        }
+
+        return Storage::url($this->logo_path);
     }
 
     # Scopes útiles

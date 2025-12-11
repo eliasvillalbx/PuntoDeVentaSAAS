@@ -20,6 +20,7 @@ use App\Http\Controllers\VentaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\CalendarEventController;
 
 // NUEVOS controladores para billing / Clip
 use App\Http\Controllers\BillingController;
@@ -127,6 +128,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])
             ->name('compras.recibir');
 
+
+             Route::get('/calendar', [CalendarEventController::class, 'index'])
+        ->name('calendar.index');
+
+    Route::get('/calendar/events', [CalendarEventController::class, 'events'])
+        ->name('calendar.events');
+
+    Route::post('/calendar/events', [CalendarEventController::class, 'store'])
+        ->name('calendar.events.store');
+
+    Route::put('/calendar/events/{event}', [CalendarEventController::class, 'update'])
+        ->name('calendar.events.update');
+
+    Route::delete('/calendar/events/{event}', [CalendarEventController::class, 'destroy'])
+        ->name('calendar.events.destroy');
         // Catálogos
         Route::resource('categorias', CategoriaController::class)
             ->parameters(['categorias' => 'categoria']);
@@ -193,6 +209,21 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/chat', [ChatController::class, 'index'])
             ->name('chat.index');
 
+
+             Route::get('/calendar', [CalendarEventController::class, 'index'])
+        ->name('calendar.index');
+
+    Route::get('/calendar/events', [CalendarEventController::class, 'events'])
+        ->name('calendar.events');
+
+    Route::post('/calendar/events', [CalendarEventController::class, 'store'])
+        ->name('calendar.events.store');
+
+    Route::put('/calendar/events/{event}', [CalendarEventController::class, 'update'])
+        ->name('calendar.events.update');
+
+    Route::delete('/calendar/events/{event}', [CalendarEventController::class, 'destroy'])
+        ->name('calendar.events.destroy');
         // Listado de conversaciones + total de no leídos (para widget / vista)
         Route::get('/chat/conversations-json', [ChatController::class, 'listConversations'])
             ->name('chat.conversations.json');

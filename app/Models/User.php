@@ -64,5 +64,11 @@ public function chatMessages()
     return $this->hasMany(\App\Models\ChatMessage::class, 'user_id');
 }
 
+public function calendarEvents()
+{
+    return $this->belongsToMany(CalendarEvent::class, 'calendar_event_user')
+        ->withTimestamps();
+}
+
 
 }

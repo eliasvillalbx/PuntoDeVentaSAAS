@@ -21,7 +21,6 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ChatController;
 
-
 // NUEVOS controladores para billing / Clip
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\ClipWebhookController;
@@ -39,11 +38,14 @@ use App\Http\Controllers\ClipWebhookController;
 /**
  * Si el usuario está autenticado, lo mandamos a dashboard.
  * Si no, mostramos welcome.
+ * Esta lógica NO genera bucles porque /dashboard no redirige de vuelta a /.
  */
 Route::get('/', function () {
-    return auth()->check()
-        ? to_route('dashboard')
-        : view('welcome');
+    if (auth()->check()) {
+        return redirect()->route('dashboard');
+    }
+
+    return view('welcome');
 })->name('home');
 
 /* ==================== AUTH (Breeze) ==================== */
@@ -62,7 +64,9 @@ Route::post('/clip/webhook', [ClipWebhookController::class, 'handle'])
 Route::middleware(['auth'])->group(function () {
 
     /* ---------- Dashboard (visible para cualquier usuario autenticado) ---------- */
-    Route::get('/dashboard', fn () => view('dashboard'))->name('dashboard');
+    Route::get('/dashboard', function () {
+        return view('dashboard');
+    })->name('dashboard');
 
     /* ---------- Billing / Suscripciones básicas (sin bloqueo de suscripción) ---------- */
     // Pantalla de aviso de pago (usa BillingController@alert)
@@ -87,13 +91,12 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     /* =======================================================================
-     * RUTAS COMPARTIDAS (útiles para ambos entornos: superadmin y con suscripción)
+     * RUTAS COMPARTIDAS (superadmin + usuarios con suscripción)
      * ======================================================================= */
 
     /**
      * Utilidades de compras para front (consulta de proveedores/costos por producto)
      * Disponibles para cualquier autenticado (no mutan estado).
-     * Si deseas restringirlas, muévelas al grupo correspondiente.
      */
     Route::get('/productos/{producto}/proveedores-json', [CompraController::class, 'proveedoresProducto'])
         ->name('productos.proveedores_json');
@@ -103,8 +106,6 @@ Route::middleware(['auth'])->group(function () {
     /**
      * ==================== VENTAS (UNIFICADO) ====================
      * Evitamos duplicar estas rutas en subgrupos para no romper nombres/URIs.
-     * - Nombre correcto de conversión: ventas.convertirPrefactura (POST)
-     * - PDF usa el método `pdf()` del controlador
      */
     Route::resource('ventas', VentaController::class)
         ->parameters(['ventas' => 'venta']);
@@ -152,13 +153,32 @@ Route::middleware(['auth'])->group(function () {
 
         Route::resource('suscripciones', SuscripcionController::class)
             ->parameters(['suscripciones' => 'suscripcion']);
-        // (la ruta de renew pública ya está arriba; aquí pueden coexistir vistas CRUD)
 
         Route::resource('gerentes', GerenteController::class)
             ->parameters(['gerentes' => 'gerente']);
 
         Route::resource('vendedores', VendedorController::class)
             ->parameters(['vendedores' => 'vendedor']);
+
+
+        Route::get('/chat', [ChatController::class, 'index'])
+            ->name('chat.index');
+
+        // Listado de conversaciones + total de no leídos (para widget / vista)
+        Route::get('/chat/conversations-json', [ChatController::class, 'listConversations'])
+            ->name('chat.conversations.json');
+
+        // Crear conversación (grupo o directa)
+        Route::post('/chat/conversations', [ChatController::class, 'storeConversation'])
+            ->name('chat.conversations.store');
+
+        // Mensajes de una conversación (JSON)
+        Route::get('/chat/conversations/{conversation}/messages', [ChatController::class, 'messages'])
+            ->name('chat.messages.index');
+
+        // Enviar mensaje a una conversación (JSON + sockets)
+        Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'sendMessage'])
+            ->name('chat.messages.store');    
     });
 
     /* =========================================================================
@@ -167,27 +187,34 @@ Route::middleware(['auth'])->group(function () {
      * ========================================================================= */
     Route::middleware(['suscripcion.activa'])->group(function () {
 
+        /* ==================== CHAT EMPRESARIAL ==================== */
 
-
-        // ==================== CHAT EMPRESARIAL ====================
+        // Vista principal tipo Messenger
         Route::get('/chat', [ChatController::class, 'index'])
             ->name('chat.index');
 
+        // Listado de conversaciones + total de no leídos (para widget / vista)
+        Route::get('/chat/conversations-json', [ChatController::class, 'listConversations'])
+            ->name('chat.conversations.json');
+
+        // Crear conversación (grupo o directa)
         Route::post('/chat/conversations', [ChatController::class, 'storeConversation'])
             ->name('chat.conversations.store');
 
+        // Mensajes de una conversación (JSON)
         Route::get('/chat/conversations/{conversation}/messages', [ChatController::class, 'messages'])
             ->name('chat.messages.index');
 
+        // Enviar mensaje a una conversación (JSON + sockets)
         Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'sendMessage'])
             ->name('chat.messages.store');
-        // Compras (operativas)
+
+        /* ==================== COMPRAS (operativas) ==================== */
         Route::resource('compras', CompraController::class);
         Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])
             ->name('compras.recibir');
 
-        // Empresas (si decides permitir administración a no-SA, deja este resource;
-        // en caso contrario, elimínalo de aquí y deja solo el de superadmin)
+        // Empresas (si decides permitir administración a no-SA)
         Route::resource('empresas', EmpresaController::class)
             ->names('empresas');
 
@@ -219,8 +246,12 @@ Route::middleware(['auth'])->group(function () {
         // Clientes
         Route::resource('clientes', ClienteController::class);
     });
-
-   
 });
- Route::post('/webhooks/clip-checkout', [ClipWebhookController::class, 'handle'])
+
+/**
+ * Webhook extra de Clip.
+ * OJO: comparte el mismo name('clip.webhook') que el otro endpoint.
+ * Puedes dejarlo si realmente lo usas con distinta URL.
+ */
+Route::post('/webhooks/clip-checkout', [ClipWebhookController::class, 'handle'])
     ->name('clip.webhook');

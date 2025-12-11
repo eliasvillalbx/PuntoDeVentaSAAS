@@ -50,4 +50,19 @@ class User extends Authenticatable
     {
         return $query->where('id_empresa', $empresaId);
     }
+
+ public function chatConversations()
+{
+    // Igual: conversation_id, no chat_conversation_id
+    return $this->belongsToMany(\App\Models\ChatConversation::class, 'chat_conversation_user', 'user_id', 'conversation_id')
+        ->withPivot(['role', 'joined_at', 'left_at'])
+        ->withTimestamps();
+}
+
+public function chatMessages()
+{
+    return $this->hasMany(\App\Models\ChatMessage::class, 'user_id');
+}
+
+
 }

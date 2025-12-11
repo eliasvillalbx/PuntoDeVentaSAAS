@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ChatConversation extends Model
 {
+    use HasFactory;
+
     protected $table = 'chat_conversations';
 
     protected $fillable = [
@@ -19,28 +19,29 @@ class ChatConversation extends Model
         'is_active',
     ];
 
-    protected $casts = [
-        'is_active' => 'boolean',
-    ];
-
-    public function empresa(): BelongsTo
+    public function empresa()
     {
-        return $this->belongsTo(Empresa::class, 'empresa_id');
+        // Ajusta el modelo si se llama diferente
+        return $this->belongsTo(\App\Models\Empresas::class, 'empresa_id');
     }
 
-    public function creator(): BelongsTo
+    public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function users(): BelongsToMany
+    /**
+     * OJO: aquí va 'conversation_id' (como en tu migración),
+     * NO 'chat_conversation_id'
+     */
+    public function users()
     {
         return $this->belongsToMany(User::class, 'chat_conversation_user', 'conversation_id', 'user_id')
             ->withPivot(['role', 'joined_at', 'left_at'])
             ->withTimestamps();
     }
 
-    public function messages(): HasMany
+    public function messages()
     {
         return $this->hasMany(ChatMessage::class, 'conversation_id');
     }

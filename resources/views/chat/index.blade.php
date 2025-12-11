@@ -1,313 +1,625 @@
-{{-- resources/views/chat/index.blade.php --}}
 <x-app-layout>
+    @php
+        /** @var \App\Models\User $authUser */
+        $authUser = auth()->user();
+        $empresaNombre = $empresa?->display_name ?? 'sin empresa asignada';
+
+        $firstConversation = $conversations->first();
+        $firstConversationTitle = null;
+
+        if ($firstConversation) {
+            if ($firstConversation->type === 'group') {
+                $firstConversationTitle = $firstConversation->name ?: ('Grupo #' . $firstConversation->id);
+            } else {
+                $others = $firstConversation->users->where('id', '!=', $authUser->id);
+                if ($others->count()) {
+                    $firstConversationTitle = $others->map(function ($u) {
+                        return trim(($u->nombre ?? '') . ' ' . ($u->apellido_paterno ?? ''));
+                    })->implode(', ');
+                } else {
+                    $firstConversationTitle = 'Conversación #' . $firstConversation->id;
+                }
+            }
+        }
+    @endphp
+
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Chat empresarial
-        </h2>
+        <div class="flex flex-col gap-1">
+            <h2 class="font-semibold text-xl text-gray-900 leading-tight">
+                {{ __('Chat empresarial') }}
+            </h2>
+            <p class="text-sm text-gray-600">
+                Estás usando el chat como
+                <span class="font-semibold text-indigo-600">{{ $roleLabel }}</span>
+                en la empresa
+                <span class="font-semibold text-indigo-700">{{ $empresaNombre }}</span>.
+            </p>
+        </div>
     </x-slot>
 
-    <div
-        x-data="chatPage({
-            conversations: @js($conversations),
-            currentUserId: {{ $currentUser->id }},
-        })"
-        x-init="init()"
-        class="bg-white shadow rounded-lg overflow-hidden h-[70vh] flex"
-    >
-        {{-- Panel izquierdo: conversaciones --}}
-        <aside class="w-1/3 border-r border-gray-200 flex flex-col">
-            <div class="p-3 border-b border-gray-200 flex items-center justify-between">
-                <h3 class="font-semibold text-gray-700">Conversaciones</h3>
-                <button
-                    type="button"
-                    @click="openNewConversation = true"
-                    class="inline-flex items-center text-sm px-2 py-1 rounded-md bg-sky-600 text-white hover:bg-sky-700"
-                >
-                    Nueva
-                </button>
-            </div>
+    <div class="py-6" x-data="chatPage()" x-init="init()">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
-            <div class="flex-1 overflow-y-auto">
-                <template x-if="conversations.length === 0">
-                    <p class="text-sm text-gray-500 p-4">
-                        Aún no tienes conversaciones. Crea una con el botón "Nueva".
-                    </p>
-                </template>
-
-                <template x-for="c in conversations" :key="c.id">
-                    <button
-                        type="button"
-                        class="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2"
-                        :class="selectedConversation && selectedConversation.id === c.id ? 'bg-gray-100' : ''"
-                        @click="selectConversation(c)"
-                    >
-                        <div class="flex-1">
-                            <div class="flex items-center justify-between">
-                                <p class="font-medium text-sm text-gray-800" x-text="conversationTitle(c)"></p>
-                                <span class="text-xs text-gray-400" x-text="c.updated_at_for_humans ?? ''"></span>
-                            </div>
-                            <p class="text-xs text-gray-500 truncate" x-text="c.last_message_preview ?? ''"></p>
-                        </div>
-                    </button>
-                </template>
-            </div>
-        </aside>
-
-        {{-- Panel derecho: mensajes --}}
-        <section class="flex-1 flex flex-col">
-            <template x-if="!selectedConversation">
-                <div class="flex-1 flex items-center justify-center text-gray-400 text-sm">
-                    Selecciona una conversación o crea una nueva.
+            {{-- Mensajes de estado --}}
+            @if (session('error'))
+                <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+                    {{ session('error') }}
                 </div>
-            </template>
+            @endif
 
-            <template x-if="selectedConversation">
-                <div class="flex-1 flex flex-col">
-                    {{-- Header conversación --}}
-                    <div class="border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-                        <div>
-                            <h3 class="font-semibold text-gray-800" x-text="conversationTitle(selectedConversation)"></h3>
-                            <p class="text-xs text-gray-500">
-                                <span x-text="selectedConversation.type === 'direct' ? 'Chat directo' : 'Grupo empresarial'"></span>
-                            </p>
+            @if (session('success'))
+                <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            <div class="bg-white border border-gray-200 shadow-sm sm:rounded-lg overflow-hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 min-h-[480px]">
+                    {{-- Columna izquierda: lista de conversaciones --}}
+                    <div class="border-b md:border-b-0 md:border-r border-gray-200 flex flex-col bg-gray-50">
+                        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-2 bg-white">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-900">
+                                    Conversaciones
+                                </h3>
+                                <p class="text-xs text-gray-500">
+                                    Gestiona los chats con usuarios de tu empresa.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                @click="openModal()"
+                                class="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 focus:ring-offset-white"
+                            >
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                                Nueva
+                            </button>
                         </div>
-                    </div>
 
-                    {{-- Mensajes --}}
-                    <div
-                        class="flex-1 overflow-y-auto px-4 py-3 space-y-2 bg-gray-50"
-                        id="chatMessagesContainer"
-                    >
-                        <template x-if="loadingMessages">
-                            <p class="text-xs text-gray-500">Cargando mensajes...</p>
-                        </template>
+                        {{-- Selector de empresa para SUPERADMIN --}}
+                        @if ($isSuperAdmin && $empresasLista->count())
+                            <div class="px-4 pt-3 pb-2 border-b border-gray-200 bg-gray-50">
+                                <form method="GET" action="{{ route('chat.index') }}" class="space-y-1.5">
+                                    <label class="block text-[11px] font-medium text-gray-700">
+                                        Empresa en contexto
+                                    </label>
+                                    <div class="flex items-center gap-2">
+                                        <select
+                                            name="empresa_id"
+                                            class="flex-1 rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        >
+                                            @foreach ($empresasLista as $e)
+                                                <option
+                                                    value="{{ $e->id }}"
+                                                    @selected($empresa && $empresa->id === $e->id)
+                                                >
+                                                    {{ $e->display_name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <button
+                                            type="submit"
+                                            class="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 focus:ring-offset-white"
+                                        >
+                                            Cambiar
+                                        </button>
+                                    </div>
+                                    <p class="text-[11px] text-gray-500">
+                                        Esto afecta las conversaciones que se muestran.
+                                    </p>
+                                </form>
+                            </div>
+                        @endif
 
-                        <template x-if="!loadingMessages && messages.length === 0">
-                            <p class="text-xs text-gray-400">No hay mensajes aún. Escribe el primero.</p>
-                        </template>
+                        {{-- Lista de conversaciones --}}
+                        <div class="flex-1 overflow-y-auto p-3 space-y-1.5">
+                            @forelse ($conversations as $conversation)
+                                @php
+                                    if ($conversation->type === 'group') {
+                                        $convTitle = $conversation->name ?: ('Grupo #' . $conversation->id);
+                                        $convSubtitle = 'Grupo de ' . $conversation->users->count() . ' participantes';
+                                    } else {
+                                        $others = $conversation->users->where('id', '!=', $authUser->id);
+                                        if ($others->count()) {
+                                            $convTitle = $others->map(function ($u) {
+                                                return trim(($u->nombre ?? '') . ' ' . ($u->apellido_paterno ?? ''));
+                                            })->implode(', ');
+                                        } else {
+                                            $convTitle = 'Conversación #' . $conversation->id;
+                                        }
+                                        $convSubtitle = 'Chat directo';
+                                    }
+                                @endphp
 
-                        <template x-for="m in messages" :key="m.id">
-                            <div class="flex" :class="m.is_me ? 'justify-end' : 'justify-start'">
-                                <div
-                                    class="max-w-xs px-3 py-2 rounded-lg text-sm"
-                                    :class="m.is_me ? 'bg-sky-600 text-white' : 'bg-white text-gray-800 border border-gray-200'"
+                                <button
+                                    type="button"
+                                    class="w-full text-left rounded-lg border border-transparent bg-white px-3 py-2.5 text-sm text-gray-900 hover:border-indigo-300 hover:bg-indigo-50 transition flex flex-col gap-0.5"
+                                    :class="selectedConversationId === {{ $conversation->id }} ? 'border-indigo-400 bg-indigo-50' : ''"
+                                    @click="selectedConversationLabel = @js($convTitle); selectConversation({{ $conversation->id }})"
                                 >
-                                    <p class="font-semibold text-xs mb-0.5" x-text="!m.is_me ? m.sender_name : 'Tú'"></p>
-                                    <p class="whitespace-pre-wrap" x-text="m.message"></p>
-                                    <p class="text-[10px] mt-1 opacity-70 text-right" x-text="m.created_at"></p>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-
-                    {{-- Error --}}
-                    <template x-if="errorMessage">
-                        <div class="px-4 py-2 bg-red-50 text-red-700 text-xs">
-                            <span x-text="errorMessage"></span>
-                        </div>
-                    </template>
-
-                    {{-- Input mensaje --}}
-                    <form
-                        @submit.prevent="sendMessage"
-                        class="border-t border-gray-200 px-3 py-2 flex items-center gap-2 bg-white"
-                    >
-                        <input
-                            type="text"
-                            x-model="newMessage"
-                            class="flex-1 text-sm border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500"
-                            placeholder="Escribe un mensaje..."
-                        >
-
-                        <button
-                            type="submit"
-                            :disabled="sending || !newMessage.trim()"
-                            class="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-60"
-                        >
-                            <span x-show="!sending">Enviar</span>
-                            <span x-show="sending">Enviando...</span>
-                        </button>
-                    </form>
-                </div>
-            </template>
-        </section>
-
-        {{-- Modal simple para nueva conversación --}}
-        <div
-            x-show="openNewConversation"
-            x-cloak
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        >
-            <div
-                class="bg-white rounded-lg shadow-lg w-full max-w-md p-4"
-                @click.outside="openNewConversation = false"
-            >
-                <h3 class="font-semibold text-gray-800 mb-2">Nueva conversación</h3>
-                <form method="POST" action="{{ route('chat.conversations.store') }}" class="space-y-3">
-                    @csrf
-
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">
-                            Nombre del grupo (opcional, si seleccionas a más de 1 usuario)
-                        </label>
-                        <input
-                            type="text"
-                            name="name"
-                            class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500"
-                            placeholder="Soporte, Ventas, General..."
-                        >
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">
-                            Miembros (usuarios de tu empresa)
-                        </label>
-                        <div class="max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1">
-                            @forelse ($empresaUsers as $u)
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" name="members[]" value="{{ $u->id }}" class="rounded border-gray-300">
-                                    <span>{{ $u->nombre }} {{ $u->apellido_paterno }} {{ $u->apellido_materno }}</span>
-                                </label>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-semibold text-xs md:text-sm line-clamp-1">
+                                            {{ $convTitle }}
+                                        </span>
+                                        <span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-700 border border-gray-200">
+                                            {{ $conversation->type === 'group' ? 'Grupo' : 'Directo' }}
+                                        </span>
+                                    </div>
+                                    <p class="text-[11px] text-gray-500 line-clamp-1">
+                                        {{ $convSubtitle }}
+                                    </p>
+                                </button>
                             @empty
-                                <p class="text-xs text-gray-400">No hay otros usuarios en tu empresa.</p>
+                                <p class="text-sm text-gray-500">
+                                    Aún no tienes conversaciones. Usa el botón
+                                    <span class="font-semibold">“Nueva”</span> para iniciar un chat.
+                                </p>
                             @endforelse
                         </div>
                     </div>
 
-                    <div class="flex justify-end gap-2 pt-2">
+                    {{-- Columna derecha: mensajes --}}
+                    <div class="md:col-span-2 flex flex-col bg-gray-50">
+                        {{-- Encabezado de la conversación --}}
+                        <div class="px-4 py-3 border-b border-gray-200 bg-white flex items-center justify-between gap-2">
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-900">
+                                    <span x-text="selectedConversationLabel || 'Selecciona una conversación'"></span>
+                                </h3>
+                                <p class="text-xs text-gray-500" x-show="selectedConversationId">
+                                    Los mensajes se actualizan en tiempo real cuando se envían.
+                                </p>
+                                <p class="text-xs text-gray-500" x-show="!selectedConversationId">
+                                    Elige una conversación en la lista de la izquierda o crea una nueva.
+                                </p>
+                            </div>
+                        </div>
+
+                        {{-- Contenido: mensajes --}}
+                        <div class="flex-1 flex flex-col">
+                            <div class="flex-1 overflow-y-auto px-4 py-3 space-y-2" x-show="selectedConversationId" x-cloak>
+                                <template x-if="loadingMessages">
+                                    <div class="text-center text-xs text-gray-500 py-4">
+                                        Cargando mensajes...
+                                    </div>
+                                </template>
+
+                                <template x-if="!loadingMessages && messages.length === 0">
+                                    <div class="text-center text-xs text-gray-500 py-4">
+                                        No hay mensajes aún. Escribe el primero.
+                                    </div>
+                                </template>
+
+                                <template x-for="msg in messages" :key="msg.id">
+                                    <div
+                                        class="flex my-0.5"
+                                        :class="msg.is_me ? 'justify-end' : 'justify-start'"
+                                    >
+                                        <div
+                                            class="max-w-[80%] rounded-2xl px-3 py-2 text-xs md:text-sm shadow-sm"
+                                            :class="msg.is_me ? 'bg-indigo-600 text-white' : 'bg-white text-gray-900 border border-gray-200'"
+                                        >
+                                            <p x-text="msg.message"></p>
+                                            <p
+                                                class="mt-1 text-[10px] opacity-75"
+                                                :class="msg.is_me ? 'text-indigo-100' : 'text-gray-500'"
+                                                x-text="(msg.sender_name || '') + (msg.created_at ? ' • ' + msg.created_at : '')"
+                                            ></p>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            {{-- Estado de error --}}
+                            <div
+                                class="px-4 py-2 text-[11px] text-red-700 bg-red-50 border-t border-red-200"
+                                x-show="error"
+                                x-text="error"
+                                x-cloak
+                            ></div>
+
+                            {{-- Formulario para enviar mensaje --}}
+                            <form
+                                x-show="selectedConversationId"
+                                x-cloak
+                                @submit.prevent="sendMessage"
+                                class="border-t border-gray-200 bg-white px-4 py-3 flex items-end gap-2"
+                            >
+                                <div class="flex-1">
+                                    <label class="sr-only">Mensaje</label>
+                                    <textarea
+                                        x-model="messageText"
+                                        rows="2"
+                                        class="block w-full rounded-md border-gray-300 bg-white text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        placeholder="Escribe un mensaje..."
+                                    ></textarea>
+                                </div>
+                                <button
+                                    type="submit"
+                                    class="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 focus:ring-offset-white"
+                                    :disabled="sending || !messageText.trim().length"
+                                >
+                                    <svg
+                                        class="h-4 w-4 mr-1"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                        <path
+                                            d="M5 12L4.289 4.934C4.17324 3.77837 5.32611 2.96335 6.39315 3.42363L20 9L6.39315 14.5764C5.32611 15.0367 4.17324 14.2216 4.289 13.066L5 6L11 12L5 12Z"
+                                            fill="currentColor"
+                                        />
+                                    </svg>
+                                    <span x-text="sending ? 'Enviando...' : 'Enviar'"></span>
+                                </button>
+                            </form>
+
+                            {{-- Placeholder cuando no hay conversación seleccionada --}}
+                            <div
+                                x-show="!selectedConversationId"
+                                class="flex-1 flex items-center justify-center text-center text-sm text-gray-500 px-6"
+                            >
+                                Selecciona una conversación de la lista o crea una nueva para comenzar a chatear.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Modal: nueva conversación --}}
+        <div
+            x-show="modalOpen"
+            x-cloak
+            class="fixed inset-0 z-40 flex items-center justify-center bg-black/20"
+        >
+            <div
+                class="w-full max-w-2xl rounded-xl border border-gray-200 bg-white shadow-xl flex flex-col max-h-[90vh]"
+            >
+                <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3 bg-gray-50">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-900">
+                            Nueva conversación
+                        </h3>
+                        <p class="text-xs text-gray-500">
+                            Selecciona participantes y, si es necesario, la empresa del chat.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                        @click="closeModal()"
+                    >
+                        <span class="sr-only">Cerrar</span>
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                            <path d="M6 6L18 18M6 18L18 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-sm text-gray-900">
+                    {{-- Info rol/empresa --}}
+                    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                        <p>
+                            Estás creando la conversación como
+                            <span class="font-semibold text-indigo-600">{{ $roleLabel }}</span>
+                            en la empresa
+                            <span class="font-semibold text-indigo-700">{{ $empresaNombre }}</span>.
+                        </p>
+                        @if ($isSuperAdmin)
+                            <p class="mt-1 text-[11px] text-gray-500">
+                                Como superadministrador puedes crear chats para cualquier empresa.
+                            </p>
+                        @endif
+                    </div>
+
+                    {{-- Empresa del chat (solo SA) --}}
+                    @if ($isSuperAdmin)
+                        <div class="space-y-1">
+                            <label class="block text-xs font-medium text-gray-700">
+                                Empresa de la conversación
+                            </label>
+                            <select
+                                x-model="newConvEmpresaId"
+                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            >
+                                @foreach ($empresasLista as $e)
+                                    <option value="{{ $e->id }}">
+                                        {{ $e->display_name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <p class="text-[11px] text-gray-500">
+                                Los mensajes de este chat se asocian a la empresa seleccionada.
+                            </p>
+                        </div>
+                    @endif
+
+                    {{-- Nombre del grupo (opcional) --}}
+                    <div class="space-y-1">
+                        <label class="block text-xs font-medium text-gray-700">
+                            Nombre del chat (opcional)
+                        </label>
+                        <input
+                            type="text"
+                            x-model="newConvName"
+                            class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            placeholder="Ej. Soporte ventas, Equipo sucursal centro..."
+                        />
+                        <p class="text-[11px] text-gray-500">
+                            Si seleccionas solo 2 personas, se creará un chat directo aunque dejes este campo vacío.
+                        </p>
+                    </div>
+
+                    {{-- Buscador de usuarios y lista con checkboxes --}}
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <label class="block text-xs font-medium text-gray-700">
+                                Participantes
+                            </label>
+                            <span class="text-[11px] text-gray-500">
+                                Seleccionados:
+                                <span class="font-semibold" x-text="selectedMembers.length"></span>
+                            </span>
+                        </div>
+
+                        <div class="relative">
+                            <input
+                                type="text"
+                                x-model="userSearch"
+                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 pl-8 pr-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                placeholder="Buscar por nombre o empresa..."
+                            />
+                            <span class="pointer-events-none absolute inset-y-0 left-2 flex items-center text-gray-400">
+                                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                                    <path d="M11 5a6 6 0 104.472 10.028l3.25 3.25" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                        </div>
+
+                        <div class="mt-2 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white">
+                            <template x-if="filteredUsers.length === 0">
+                                <div class="px-3 py-2 text-[11px] text-gray-500">
+                                    No se encontraron usuarios con ese criterio.
+                                </div>
+                            </template>
+
+                            <template x-for="u in filteredUsers" :key="u.id">
+                                <label
+                                    class="flex items-start gap-2 px-3 py-2 text-xs text-gray-900 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                        :value="u.id"
+                                        :checked="isMemberSelected(u.id)"
+                                        @change="toggleMember(u.id)"
+                                    />
+                                    <div class="flex-1">
+                                        <p class="font-semibold" x-text="`${u.nombre ?? ''} ${u.apellido_paterno ?? ''}`.trim()"></p>
+                                        <p class="text-[11px] text-gray-500" x-text="u.empresa_nombre ? `Empresa: ${u.empresa_nombre}` : 'Empresa: n/d'"></p>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+
+                        <p class="text-[11px] text-gray-500">
+                            Marca las casillas de los usuarios que quieras incluir en la conversación.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-200 px-4 py-3 flex items-center justify-between gap-3 text-xs bg-gray-50">
+                    <div
+                        class="text-[11px] text-red-700"
+                        x-show="error"
+                        x-text="error"
+                        x-cloak
+                    ></div>
+                    <div class="ml-auto flex items-center gap-2">
                         <button
                             type="button"
-                            @click="openNewConversation = false"
-                            class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                            @click="closeModal()"
                         >
                             Cancelar
                         </button>
                         <button
-                            type="submit"
-                            class="px-3 py-1.5 text-sm rounded-md bg-sky-600 text-white hover:bg-sky-700"
+                            type="button"
+                            class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                            :disabled="selectedMembers.length === 0"
+                            @click="createConversation()"
                         >
-                            Crear
+                            Crear conversación
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
 
-    {{-- Script Alpine para lógica básica (polling simple, sin websockets aún) --}}
+    {{-- Script Alpine para manejar el chat --}}
     <script>
-        function chatPage(props) {
+        function chatPage() {
             return {
-                conversations: props.conversations || [],
-                currentUserId: props.currentUserId,
-                selectedConversation: null,
+                // Estado
+                selectedConversationId: null,
+                selectedConversationLabel: @json($firstConversationTitle),
                 messages: [],
-                newMessage: '',
                 loadingMessages: false,
                 sending: false,
-                errorMessage: '',
-                openNewConversation: false,
+                error: null,
+                messageText: '',
+
+                modalOpen: false,
+                userSearch: '',
+                newConvEmpresaId: {{ $empresaId ?? 'null' }},
+                newConvName: '',
+                selectedMembers: [],
+
+                empresaId: {{ $empresaId ?? 'null' }},
+                empresaUsers: @json($empresaUsers),
+                empresasLista: @json($empresasLista),
+                currentUserId: {{ auth()->id() }},
+                csrfToken: '{{ csrf_token() }}',
 
                 init() {
-                    // Si viene una conversación ya seleccionada por query, la podrías leer aquí.
-                    if (this.conversations.length > 0) {
-                        this.selectConversation(this.conversations[0]);
+                    @if ($firstConversation)
+                        this.selectedConversationId = {{ $firstConversation->id }};
+                        if (!this.selectedConversationLabel) {
+                            this.selectedConversationLabel = 'Conversación #{{ $firstConversation->id }}';
+                        }
+                        this.selectConversation(this.selectedConversationId);
+                    @endif
+                },
+
+                get filteredUsers() {
+                    const term = this.userSearch.toLowerCase();
+                    if (!term) {
+                        return this.empresaUsers;
+                    }
+                    return this.empresaUsers.filter(u => {
+                        const full = `${u.nombre ?? ''} ${u.apellido_paterno ?? ''} ${u.apellido_materno ?? ''} ${u.empresa_nombre ?? ''}`.toLowerCase();
+                        return full.includes(term);
+                    });
+                },
+
+                isMemberSelected(id) {
+                    return this.selectedMembers.includes(id);
+                },
+
+                toggleMember(id) {
+                    if (this.isMemberSelected(id)) {
+                        this.selectedMembers = this.selectedMembers.filter(x => x !== id);
+                    } else {
+                        this.selectedMembers.push(id);
                     }
                 },
 
-                conversationTitle(c) {
-                    if (c.type === 'group') {
-                        return c.name || 'Grupo sin nombre';
-                    }
-                    // direct: mostrar nombre del otro
-                    if (!c.users) return 'Chat';
-                    const other = c.users.find(u => u.id !== this.currentUserId);
-                    if (!other) return 'Chat directo';
-                    return `${other.nombre} ${other.apellido_paterno ?? ''}`.trim();
-                },
-
-                selectConversation(c) {
-                    this.selectedConversation = c;
-                    this.loadMessages();
-                },
-
-                async loadMessages() {
-                    if (!this.selectedConversation) return;
-
+                async selectConversation(id) {
+                    this.selectedConversationId = id;
                     this.loadingMessages = true;
-                    this.errorMessage = '';
+                    this.error = null;
+                    this.messages = [];
 
                     try {
-                        const url = `/chat/conversations/${this.selectedConversation.id}/messages`;
-                        const res = await fetch(url, {
+                        const res = await fetch(`/chat/conversations/${id}/messages`, {
                             headers: {
-                                'Accept': 'application/json',
-                            },
+                                'Accept': 'application/json'
+                            }
                         });
 
                         const data = await res.json();
 
                         if (!data.ok) {
-                            this.errorMessage = data.message || 'Error al cargar mensajes.';
-                            this.messages = [];
-                        } else {
-                            this.messages = data.messages || [];
-                            this.$nextTick(() => this.scrollToBottom());
+                            this.error = data.message || 'Error al obtener mensajes.';
+                            return;
                         }
+
+                        this.messages = data.messages || [];
                     } catch (e) {
                         console.error(e);
-                        this.errorMessage = 'No se pudieron cargar los mensajes.';
-                        this.messages = [];
+                        this.error = 'Error al obtener mensajes.';
                     } finally {
                         this.loadingMessages = false;
                     }
                 },
 
                 async sendMessage() {
-                    if (!this.selectedConversation || !this.newMessage.trim()) {
-                        return;
-                    }
+                    if (!this.messageText.trim() || !this.selectedConversationId) return;
 
                     this.sending = true;
-                    this.errorMessage = '';
+                    this.error = null;
 
                     try {
-                        const url = `/chat/conversations/${this.selectedConversation.id}/messages`;
-                        const res = await fetch(url, {
+                        const form = new FormData();
+                        form.append('message', this.messageText.trim());
+                        form.append('_token', this.csrfToken);
+
+                        const res = await fetch(`/chat/conversations/${this.selectedConversationId}/messages`, {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                            },
-                            body: JSON.stringify({
-                                message: this.newMessage,
-                            }),
+                            body: form
                         });
 
                         const data = await res.json();
 
                         if (!data.ok) {
-                            this.errorMessage = data.message || 'No se pudo enviar el mensaje.';
-                        } else if (data.message) {
-                            this.messages.push(data.message);
-                            this.newMessage = '';
-                            this.$nextTick(() => this.scrollToBottom());
+                            this.error = data.message || 'No se pudo enviar el mensaje.';
+                            return;
                         }
+
+                        if (data.message) {
+                            this.messages.push(data.message);
+                        }
+
+                        this.messageText = '';
                     } catch (e) {
                         console.error(e);
-                        this.errorMessage = 'Error de conexión al enviar el mensaje.';
+                        this.error = 'No se pudo enviar el mensaje.';
                     } finally {
                         this.sending = false;
                     }
                 },
 
-                scrollToBottom() {
-                    const container = document.getElementById('chatMessagesContainer');
-                    if (container) {
-                        container.scrollTop = container.scrollHeight;
+                openModal() {
+                    this.modalOpen = true;
+                    this.error = null;
+                    this.userSearch = '';
+                    this.selectedMembers = this.currentUserId ? [this.currentUserId] : [];
+
+                    if (!this.newConvEmpresaId && this.empresaId) {
+                        this.newConvEmpresaId = this.empresaId;
                     }
                 },
+
+                closeModal() {
+                    this.modalOpen = false;
+                },
+
+                async createConversation() {
+                    this.error = null;
+
+                    if (this.selectedMembers.length === 0) {
+                        this.error = 'Selecciona al menos un participante.';
+                        return;
+                    }
+
+                    try {
+                        const form = new FormData();
+                        if (this.newConvName) {
+                            form.append('name', this.newConvName);
+                        }
+                        if (this.newConvEmpresaId) {
+                            form.append('empresa_id', this.newConvEmpresaId);
+                        }
+                        this.selectedMembers.forEach(id => form.append('members[]', id));
+                        form.append('_token', this.csrfToken);
+
+                        const res = await fetch('/chat/conversations', {
+                            method: 'POST',
+                            body: form
+                        });
+
+                        // En éxito Laravel redirige al index -> recargamos
+                        if (res.redirected) {
+                            window.location = res.url;
+                            return;
+                        }
+
+                        const data = await res.json().catch(() => null);
+                        if (data && data.error) {
+                            this.error = data.error || 'No se pudo crear la conversación.';
+                            return;
+                        }
+
+                        window.location.reload();
+                    } catch (e) {
+                        console.error(e);
+                        this.error = 'No se pudo crear la conversación.';
+                    }
+                }
             }
         }
     </script>

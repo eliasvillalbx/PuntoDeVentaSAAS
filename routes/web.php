@@ -25,6 +25,7 @@ use App\Http\Controllers\CalendarEventController;
 // NUEVOS controladores para billing / Clip
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\ClipWebhookController;
+use App\Http\Controllers\BackupController;
 
 /*
 |--------------------------------------------------------------------------
@@ -123,6 +124,11 @@ Route::middleware(['auth'])->group(function () {
      * ========================================================================= */
     Route::middleware(['role:superadmin'])->group(function () {
 
+        Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
+        Route::post('/backups/create', [BackupController::class, 'create'])->name('backups.create');
+        Route::get('/backups/download', [BackupController::class, 'download'])->name('backups.download');
+        Route::delete('/backups/delete', [BackupController::class, 'delete'])->name('backups.delete');
+        Route::post('/backups/restore', [BackupController::class, 'restore'])->name('backups.restore');
         // Administración de compras (sin bloqueo de suscripción para SA)
         Route::resource('compras', CompraController::class);
         Route::post('/compras/{id}/recibir', [CompraController::class, 'recibir'])

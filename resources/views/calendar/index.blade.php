@@ -33,9 +33,11 @@
                             <span class="text-indigo-700 font-bold">{{ $empresaNombre }}</span>
                         </h3>
                         <p class="text-xs text-gray-500">
-                            Puedes cambiar el rango de fechas o hacer clic sobre un día para crear un evento
+                            Haz clic sobre un evento para ver detalles
                             @if($canManage)
-                                , o arrastrar eventos para moverlos.
+                                , o arrástralo para moverlo.
+                            @else
+                                .
                             @endif
                         </p>
                     </div>
@@ -87,7 +89,7 @@
             </div>
         </div>
 
-        {{-- Modal crear / editar evento --}}
+        {{-- Modal crear / editar / ver evento --}}
         <div
             x-show="modalOpen"
             x-cloak
@@ -97,12 +99,15 @@
                 {{-- Header --}}
                 <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3 bg-gray-50">
                     <div>
-                        <h3 class="text-sm font-semibold text-gray-900" x-text="editingEventId ? 'Editar evento' : 'Nuevo evento'"></h3>
+                        {{-- Lógica del título dinámica --}}
+                        <h3 class="text-sm font-semibold text-gray-900" 
+                            x-text="editingEventId ? (canManage ? 'Editar evento' : 'Detalles del evento') : 'Nuevo evento'">
+                        </h3>
                         <p class="text-xs text-gray-500">
                             @if($isSuperAdmin)
-                                Como superadministrador puedes crear eventos para cualquier empresa.
+                                Gestión de eventos globales.
                             @else
-                                Los eventos se crearán dentro de tu empresa.
+                                {{ $empresaNombre }}
                             @endif
                         </p>
                     </div>
@@ -123,17 +128,14 @@
                     {{-- Empresa (solo SA) --}}
                     @if ($isSuperAdmin)
                         <div class="space-y-1">
-                            <label class="block text-xs font-medium text-gray-700">
-                                Empresa
-                            </label>
+                            <label class="block text-xs font-medium text-gray-700">Empresa</label>
                             <select
                                 x-model="form.empresa_id"
-                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                :disabled="!canManage"
+                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
                             >
                                 @foreach ($empresasLista as $e)
-                                    <option value="{{ $e->id }}">
-                                        {{ $e->display_name }}
-                                    </option>
+                                    <option value="{{ $e->id }}">{{ $e->display_name }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -141,38 +143,35 @@
 
                     {{-- Título --}}
                     <div class="space-y-1">
-                        <label class="block text-xs font-medium text-gray-700">
-                            Título
-                        </label>
+                        <label class="block text-xs font-medium text-gray-700">Título</label>
                         <input
                             type="text"
                             x-model="form.title"
-                            class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                            placeholder="Ej. Junta con cliente, corte de caja..."
+                            :disabled="!canManage"
+                            class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
+                            placeholder="Ej. Junta con cliente..."
                         />
                     </div>
 
                     {{-- Fechas --}}
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="space-y-1">
-                            <label class="block text-xs font-medium text-gray-700">
-                                Inicio
-                            </label>
+                            <label class="block text-xs font-medium text-gray-700">Inicio</label>
                             <input
                                 type="datetime-local"
                                 x-model="form.start"
-                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                :disabled="!canManage"
+                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
                             />
                         </div>
 
                         <div class="space-y-1">
-                            <label class="block text-xs font-medium text-gray-700">
-                                Fin
-                            </label>
+                            <label class="block text-xs font-medium text-gray-700">Fin</label>
                             <input
                                 type="datetime-local"
                                 x-model="form.end"
-                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                :disabled="!canManage"
+                                class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
                             />
                         </div>
                     </div>
@@ -183,67 +182,53 @@
                             id="all-day"
                             type="checkbox"
                             x-model="form.all_day"
-                            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            :disabled="!canManage"
+                            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
                         />
-                        <label for="all-day" class="text-xs text-gray-700">
-                            Evento de todo el día
-                        </label>
+                        <label for="all-day" class="text-xs text-gray-700">Evento de todo el día</label>
                     </div>
 
-                    {{-- Usuarios asignados (muchos) --}}
+                    {{-- Usuarios asignados --}}
                     <div class="space-y-1">
-                        <label class="block text-xs font-medium text-gray-700">
-                            Usuarios asignados al evento
-                        </label>
-
-                        <div class="border border-gray-200 rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
+                        <label class="block text-xs font-medium text-gray-700">Usuarios asignados</label>
+                        <div class="border border-gray-200 rounded-md p-2 max-h-40 overflow-y-auto space-y-1 bg-white" :class="!canManage ? 'bg-gray-50' : ''">
                             @forelse ($usuariosEmpresa as $u)
-                                @php
-                                    $nombreCompleto = trim(($u->nombre ?? '') . ' ' . ($u->apellido_paterno ?? ''));
-                                @endphp
                                 <label class="flex items-center gap-2 text-xs text-gray-700">
                                     <input
                                         type="checkbox"
                                         value="{{ $u->id }}"
                                         x-model="form.assigned_user_ids"
-                                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                        :disabled="!canManage"
+                                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
                                     />
-                                    <span>{{ $nombreCompleto }}</span>
+                                    <span>{{ $u->nombre }} {{ $u->apellido_paterno }}</span>
                                 </label>
                             @empty
-                                <p class="text-[11px] text-gray-500">
-                                    No hay usuarios registrados en esta empresa.
-                                </p>
+                                <p class="text-[11px] text-gray-500">No hay usuarios registrados.</p>
                             @endforelse
                         </div>
-
-                        <p class="text-[11px] text-gray-500">
-                            Puedes asignar uno o varios usuarios al evento. El responsable sigue siendo quien lo crea.
-                        </p>
                     </div>
 
                     {{-- Descripción --}}
                     <div class="space-y-1">
-                        <label class="block text-xs font-medium text-gray-700">
-                            Descripción
-                        </label>
+                        <label class="block text-xs font-medium text-gray-700">Descripción</label>
                         <textarea
                             x-model="form.description"
                             rows="3"
-                            class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            :disabled="!canManage"
+                            class="block w-full rounded-md border-gray-300 bg-white text-xs text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-500"
                             placeholder="Detalles del evento..."
                         ></textarea>
                     </div>
 
                     {{-- Color --}}
                     <div class="space-y-1">
-                        <label class="block text-xs font-medium text-gray-700">
-                            Color
-                        </label>
+                        <label class="block text-xs font-medium text-gray-700">Color</label>
                         <input
                             type="color"
                             x-model="form.color"
-                            class="h-7 w-12 border border-gray-300 rounded-md bg-white p-0"
+                            :disabled="!canManage"
+                            class="h-7 w-12 border border-gray-300 rounded-md bg-white p-0 disabled:opacity-50"
                         />
                     </div>
                 </div>
@@ -257,16 +242,19 @@
                         x-cloak
                     ></div>
                     <div class="ml-auto flex items-center gap-2">
+                        {{-- Botón Cancelar/Cerrar (Siempre visible) --}}
                         <button
                             type="button"
                             class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
                             @click="closeModal()"
+                            x-text="canManage ? 'Cancelar' : 'Cerrar'"
                         >
-                            Cancelar
                         </button>
 
+                        {{-- Botón Guardar (Solo si puede gestionar) --}}
                         <button
                             type="button"
+                            x-show="canManage"
                             class="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
                             :disabled="saving"
                             @click="saveEvent()"
@@ -274,9 +262,10 @@
                             <span x-text="saving ? 'Guardando...' : 'Guardar'"></span>
                         </button>
 
+                        {{-- Botón Eliminar (Solo si puede gestionar y está editando) --}}
                         <button
                             type="button"
-                            x-show="editingEventId"
+                            x-show="editingEventId && canManage"
                             class="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
                             :disabled="deleting"
                             @click="deleteEvent()"
@@ -296,7 +285,6 @@
             return {
                 calendar: null,
                 error: null,
-
                 modalOpen: false,
                 formError: null,
                 saving: false,
@@ -311,7 +299,7 @@
                     end: '',
                     all_day: false,
                     color: '#4f46e5',
-                    assigned_user_ids: [], // <- IDs de usuarios asignados
+                    assigned_user_ids: [],
                 },
 
                 empresaId: {{ $empresaId ? (int)$empresaId : 'null' }},
@@ -326,8 +314,9 @@
                         initialView: 'dayGridMonth',
                         locale: 'es',
                         height: 'auto',
+                        // Solo permitimos seleccionar (drag) y editar (drop/resize) si puede gestionar
                         selectable: this.canManage,
-                        editable: this.canManage,
+                        editable: this.canManage, 
                         eventResizableFromStart: this.canManage,
                         headerToolbar: {
                             left: 'prev,next today',
@@ -339,7 +328,6 @@
 
                             self.editingEventId = null;
                             self.formError = null;
-
                             self.resetForm();
 
                             self.form.all_day = info.allDay;
@@ -349,13 +337,14 @@
                             self.modalOpen = true;
                         },
                         eventClick(info) {
-                            if (!self.canManage) return;
-
+                            // AQUÍ ESTABA EL CAMBIO PRINCIPAL:
+                            // Ya NO retornamos si !canManage. Permitimos abrir el modal.
+                            
                             const ev = info.event;
-
                             self.editingEventId = ev.id;
                             self.formError = null;
 
+                            // Llenamos el formulario (aunque sea solo lectura)
                             self.form.title = ev.title;
                             self.form.description = ev.extendedProps?.description || '';
                             self.form.all_day = ev.allDay;
@@ -363,61 +352,37 @@
                             self.form.start = self.toLocalDatetimeInput(ev.start);
                             self.form.end = ev.end ? self.toLocalDatetimeInput(ev.end) : '';
                             self.form.empresa_id = ev.extendedProps?.empresa_id || self.empresaId;
-
-                            // cargar usuarios asignados
                             self.form.assigned_user_ids = ev.extendedProps?.assigned_user_ids || [];
 
                             self.modalOpen = true;
                         },
                         eventDrop: async function(info) {
-                            if (!self.canManage) {
-                                info.revert();
-                                return;
-                            }
-
-                            try {
-                                await self.updateEventDates(info.event);
-                            } catch (e) {
-                                console.error(e);
-                                info.revert();
-                            }
+                            if (!self.canManage) { info.revert(); return; }
+                            try { await self.updateEventDates(info.event); } 
+                            catch (e) { console.error(e); info.revert(); }
                         },
                         eventResize: async function(info) {
-                            if (!self.canManage) {
-                                info.revert();
-                                return;
-                            }
-
-                            try {
-                                await self.updateEventDates(info.event);
-                            } catch (e) {
-                                console.error(e);
-                                info.revert();
-                            }
+                            if (!self.canManage) { info.revert(); return; }
+                            try { await self.updateEventDates(info.event); } 
+                            catch (e) { console.error(e); info.revert(); }
                         },
                         events: async function(fetchInfo, successCallback, failureCallback) {
                             try {
                                 const params = new URLSearchParams();
-                                if (self.empresaId) {
-                                    params.append('empresa_id', self.empresaId);
-                                }
+                                if (self.empresaId) params.append('empresa_id', self.empresaId);
                                 const res = await fetch(`/calendar/events?${params.toString()}`, {
                                     headers: { 'Accept': 'application/json' }
                                 });
-
                                 const data = await res.json();
-
                                 if (!data.ok) {
-                                    self.error = data.message || 'No se pudieron cargar los eventos.';
+                                    self.error = data.message || 'Error al cargar eventos.';
                                     failureCallback();
                                     return;
                                 }
-
                                 self.error = null;
                                 successCallback(data.events || []);
                             } catch (e) {
-                                console.error(e);
-                                self.error = 'No se pudieron cargar los eventos.';
+                                self.error = 'Error de conexión.';
                                 failureCallback(e);
                             }
                         },
@@ -456,10 +421,7 @@
                         start: event.start.toISOString(),
                         _token: this.csrfToken,
                     };
-
-                    if (event.end) {
-                        payload.end = event.end.toISOString();
-                    }
+                    if (event.end) payload.end = event.end.toISOString();
 
                     const res = await fetch(`/calendar/events/${id}`, {
                         method: 'PUT',
@@ -471,15 +433,13 @@
                         },
                         body: JSON.stringify(payload),
                     });
-
                     const data = await res.json();
-                    if (!data.ok) {
-                        this.error = data.message || 'No se pudo actualizar la fecha del evento.';
-                        throw new Error(this.error);
-                    }
+                    if (!data.ok) throw new Error(data.message);
                 },
 
                 openModal() {
+                    // Solo permitir abrir modal "Nuevo" si puede gestionar
+                    if (!this.canManage) return; 
                     this.editingEventId = null;
                     this.formError = null;
                     this.resetForm();
@@ -491,11 +451,7 @@
                 },
 
                 async saveEvent() {
-                    if (!this.canManage) {
-                        this.formError = 'No tienes permisos para guardar eventos.';
-                        return;
-                    }
-
+                    if (!this.canManage) return;
                     this.saving = true;
                     this.formError = null;
 
@@ -537,17 +493,15 @@
                         });
 
                         const data = await res.json();
-
                         if (!data.ok) {
-                            this.formError = data.message || 'No se pudo guardar el evento.';
+                            this.formError = data.message || 'No se pudo guardar.';
                             return;
                         }
 
                         this.calendar.refetchEvents();
                         this.modalOpen = false;
                     } catch (e) {
-                        console.error(e);
-                        this.formError = 'Ocurrió un error al guardar el evento.';
+                        this.formError = 'Error al guardar.';
                     } finally {
                         this.saving = false;
                     }
@@ -555,10 +509,7 @@
 
                 async deleteEvent() {
                     if (!this.canManage || !this.editingEventId) return;
-
                     this.deleting = true;
-                    this.formError = null;
-
                     try {
                         const res = await fetch(`/calendar/events/${this.editingEventId}`, {
                             method: 'DELETE',
@@ -568,19 +519,15 @@
                                 'X-CSRF-TOKEN': this.csrfToken,
                             },
                         });
-
                         const data = await res.json();
-
                         if (!data.ok) {
-                            this.formError = data.message || 'No se pudo eliminar el evento.';
+                            this.formError = data.message || 'No se pudo eliminar.';
                             return;
                         }
-
                         this.calendar.refetchEvents();
                         this.modalOpen = false;
                     } catch (e) {
-                        console.error(e);
-                        this.formError = 'Ocurrió un error al eliminar el evento.';
+                        this.formError = 'Error al eliminar.';
                     } finally {
                         this.deleting = false;
                     }

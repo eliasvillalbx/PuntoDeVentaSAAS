@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AdminEmpresaController;
 use App\Http\Controllers\GerenteController;
 use App\Http\Controllers\VendedorController;
@@ -123,6 +124,12 @@ Route::middleware(['auth'])->group(function () {
      *   - Todo lo de gestión global: empresas, suscripciones, usuarios claves, catálogos
      * ========================================================================= */
     Route::middleware(['role:superadmin'])->group(function () {
+
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    
+    // Rutas de exportación
+    Route::get('/dashboard/export/excel', [DashboardController::class, 'exportarExcel'])->name('export.excel');
+    Route::get('/dashboard/export/pdf', [DashboardController::class, 'exportarPdf'])->name('export.pdf');
 
         Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
         Route::post('/backups/create', [BackupController::class, 'create'])->name('backups.create');

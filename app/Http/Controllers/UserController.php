@@ -7,6 +7,8 @@ use App\Models\Empresa;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB; // <--- Importante para transacciones
+use Illuminate\Database\QueryException;
 
 class UserController extends Controller
 {
@@ -22,7 +24,7 @@ class UserController extends Controller
             // 1. Solo ver usuarios de mi empresa
             $query->deEmpresa($user->id_empresa);
 
-            // 2. NUEVO: Ocultar a los SuperAdmins (Solo SA pueden ver otros SA)
+            // 2. Ocultar a los SuperAdmins (Solo SA pueden ver otros SA)
             $query->whereDoesntHave('roles', function ($q) {
                 $q->where('name', 'superadmin');
             });
@@ -134,12 +136,39 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
-        // NUEVO: Evitar auto-eliminación
+        // 1. Evitar auto-eliminación
         if (auth()->id() === $user->id) {
             return back()->with('error', 'No puedes eliminar tu propia cuenta mientras estás logueado.');
         }
 
-        $user->delete();
-        return back()->with('success', 'Usuario eliminado.');
+        // 2. INICIAMOS TRANSACCIÓN
+        // Esto asegura que si falla el delete, se revierta cualquier cambio en roles
+        DB::beginTransaction();
+
+        try {
+            // Intentamos eliminar
+            $user->delete();
+
+            // Si llegamos aquí, todo salió bien
+            DB::commit();
+            
+            return back()->with('success', 'Usuario eliminado correctamente.');
+
+        } catch (QueryException $e) {
+            // REVERTIMOS CAMBIOS (Devuelve los roles si se hubieran quitado)
+            DB::rollBack();
+
+            // Error 1451: Integridad referencial (tiene compras/ventas asociadas)
+            if ($e->getCode() == "23000") {
+                return back()->with('error', 'No se puede eliminar el usuario porque tiene registros asociados (ventas, compras, etc.). Sus roles han sido restaurados.');
+            }
+
+            return back()->with('error', 'Ocurrió un error de base de datos inesperado.');
+            
+        } catch (\Exception $e) {
+            // Cualquier otro error
+            DB::rollBack();
+            return back()->with('error', 'Ocurrió un error inesperado: ' . $e->getMessage());
+        }
     }
 }

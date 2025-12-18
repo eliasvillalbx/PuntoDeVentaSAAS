@@ -5,6 +5,7 @@
   // Verificaciones de estado para mantener menús abiertos
   $isVentasActive   = $isActive('ventas.*');
   $isComprasActive  = $isActive('compras.*');
+  $isReportesActive = $isActive('reportes.*'); // <--- NUEVO
   $isSistemaActive  = $isActive('backups.*') || $isActive('logs.*'); 
   
   // Nuevo: Verificación para Usuarios
@@ -26,6 +27,7 @@
       this.open.catalogo    ??= false;
       this.open.compras     ??= false;
       this.open.ventas      ??= true;
+      this.open.reportes    ??= false; // <--- NUEVO
       this.open.membresia   ??= false; 
       this.open.sistema     ??= false; 
     },
@@ -262,6 +264,31 @@
     </section>
     @endif
 
+    {{-- ===================== REPORTES (NUEVA SECCIÓN) ===================== --}}
+    @if(auth()->user()?->hasAnyRole(['superadmin','administrador_empresa','gerente']))
+    <section class="space-y-1">
+      <button type="button"
+              class="group w-full flex items-center gap-3 rounded-lg text-[11px] font-bold tracking-wide text-gray-400 hover:text-indigo-600 hover:bg-indigo-50/50 px-3 py-2 transition-all"
+              :class="!sidebarOpen ? 'justify-center' : ''"
+              @click="open.reportes = !open.reportes">
+        <span class="material-symbols-outlined text-[20px]">analytics</span>
+        <span class="uppercase flex-1 text-left" x-show="sidebarOpen" x-transition>ANALÍTICA</span>
+        <span class="material-symbols-outlined text-[16px] transition-transform duration-200"
+              x-show="sidebarOpen"
+              :class="open.reportes ? 'rotate-0' : '-rotate-90'">expand_more</span>
+      </button>
+
+      <div x-show="open.reportes" x-collapse class="space-y-1 pl-1" x-cloak>
+        <a href="{{ route('reportes.index') }}"
+           class="group relative flex items-center gap-3 px-3 py-2 rounded-md transition-colors {{ $isReportesActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+           @if($isReportesActive)<div class="absolute left-0 h-6 w-1 bg-indigo-600 rounded-r-full"></div>@endif
+          <span class="material-symbols-outlined text-[20px] {{ $isReportesActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-500' }}">summarize</span>
+          <span class="text-sm truncate" x-show="sidebarOpen">Centro de Reportes</span>
+        </a>
+      </div>
+    </section>
+    @endif
+
     {{-- ===================== MEMBRESÍA ===================== --}}
     <section class="space-y-1">
       <button type="button"
@@ -285,7 +312,7 @@
       </div>
     </section>
 
-    {{-- ===================== SISTEMA (NUEVO) ===================== --}}
+    {{-- ===================== SISTEMA ===================== --}}
     @if(auth()->user()?->hasAnyRole(['superadmin','administrador_empresa']))
     <div class="pt-4 mt-2 border-t border-gray-100">
       <section class="space-y-1">

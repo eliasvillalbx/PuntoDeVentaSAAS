@@ -61,7 +61,7 @@ class Cliente extends Model
         )) ?: '—';
     }
 
-    // Scope por empresa
+    /// Scope por empresa
     public function scopeDeEmpresa($query, int $empresaId)
     {
         return $query->where('empresa_id', $empresaId);

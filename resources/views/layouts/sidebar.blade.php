@@ -5,9 +5,12 @@
   // Verificaciones de estado para mantener menús abiertos
   $isVentasActive   = $isActive('ventas.*');
   $isComprasActive  = $isActive('compras.*');
-  $isSistemaActive  = $isActive('backups.*') || $isActive('logs.*'); // Agregado para backups
+  $isSistemaActive  = $isActive('backups.*') || $isActive('logs.*'); 
+  
+  // Nuevo: Verificación para Usuarios
+  $isUsersActive    = $isActive('users.*');
 
-  // KPIs o Badges (Si no existen las variables, se usan nulos para no romper la vista)
+  // KPIs o Badges
   $kpis = [
     'prefacturasPendientes' => $prefacturasPendientes ?? null,
   ];
@@ -24,7 +27,7 @@
       this.open.compras     ??= false;
       this.open.ventas      ??= true;
       this.open.membresia   ??= false; 
-      this.open.sistema     ??= false; // Nueva sección
+      this.open.sistema     ??= false; 
     },
     persist(){ localStorage.setItem('sb_open', JSON.stringify(this.open)); }
   }"
@@ -101,6 +104,15 @@
       </button>
 
       <div x-show="open.personas" x-collapse class="space-y-1 pl-1" x-cloak>
+        
+        {{-- NUEVO: Gestión de Usuarios --}}
+        <a href="{{ route('users.index') }}"
+           class="group relative flex items-center gap-3 px-3 py-2 rounded-md transition-colors {{ $isUsersActive ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
+           @if($isUsersActive)<div class="absolute left-0 h-6 w-1 bg-indigo-600 rounded-r-full"></div>@endif
+          <span class="material-symbols-outlined text-[20px] {{ $isUsersActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-500' }}">group</span>
+          <span class="text-sm truncate" x-show="sidebarOpen">Usuarios</span>
+        </a>
+
         @role('superadmin')
         <a href="{{ route('admin-empresas.index') }}"
            class="group relative flex items-center gap-3 px-3 py-2 rounded-md transition-colors {{ $isActive('admin-empresas.*') ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">

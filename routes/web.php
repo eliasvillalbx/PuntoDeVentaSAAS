@@ -22,6 +22,7 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CalendarEventController;
+use App\Http\Controllers\UserController;
 
 // NUEVOS controladores para billing / Clip
 use App\Http\Controllers\BillingController;
@@ -106,6 +107,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/productos/{producto}/costo-para/{proveedor}', [CompraController::class, 'costoProductoProveedor'])
         ->name('productos.costo_para_proveedor');
 
+
+
+
     /**
      * ==================== VENTAS (UNIFICADO) ====================
      * Evitamos duplicar estas rutas en subgrupos para no romper nombres/URIs.
@@ -125,6 +129,8 @@ Route::middleware(['auth'])->group(function () {
      * ========================================================================= */
     Route::middleware(['role:superadmin'])->group(function () {
 
+
+        Route::resource('users', UserController::class);
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
     // Rutas de exportación
@@ -178,6 +184,7 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('admin-empresas', AdminEmpresaController::class)
             ->parameters(['admin-empresas' => 'admin_empresa']);
 
+            Route::resource('users', UserController::class);
         Route::resource('empresas', EmpresaController::class);
 
         Route::resource('suscripciones', SuscripcionController::class)

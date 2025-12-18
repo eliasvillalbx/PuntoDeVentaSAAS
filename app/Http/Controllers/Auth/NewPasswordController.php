@@ -16,7 +16,7 @@ use Illuminate\View\View;
 class NewPasswordController extends Controller
 {
     /**
-     * Display the password reset view.
+     * Muestra la vista para restablecer la contraseña.
      */
     public function create(Request $request): View
     {
@@ -24,21 +24,24 @@ class NewPasswordController extends Controller
     }
 
     /**
-     * Handle an incoming new password request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
+     * Maneja la solicitud de cambio de contraseña.
      */
     public function store(Request $request): RedirectResponse
     {
+        // 1. Validaciones en español
         $request->validate([
             'token' => ['required'],
             'email' => ['required', 'email'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ], [
+            'email.required' => 'El correo electrónico es obligatorio.',
+            'email.email' => 'El formato del correo no es válido.',
+            'password.required' => 'La nueva contraseña es obligatoria.',
+            'password.confirmed' => 'La confirmación de la contraseña no coincide.',
+            'token.required' => 'El token de seguridad falta o es inválido.',
         ]);
 
-        // Here we will attempt to reset the user's password. If it is successful we
-        // will update the password on an actual user model and persist it to the
-        // database. Otherwise we will parse the error and return the response.
+        // 2. Intentamos restablecer la contraseña
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $user) use ($request) {
@@ -51,12 +54,21 @@ class NewPasswordController extends Controller
             }
         );
 
-        // If the password was successfully reset, we will redirect the user back to
-        // the application's home authenticated view. If there is an error we can
-        // redirect them back to where they came from with their error message.
-        return $status == Password::PASSWORD_RESET
-                    ? redirect()->route('login')->with('status', __($status))
-                    : back()->withInput($request->only('email'))
-                        ->withErrors(['email' => __($status)]);
+        // 3. Respuesta de Éxito
+        if ($status == Password::PASSWORD_RESET) {
+            return redirect()->route('login')
+                ->with('status', '¡Tu contraseña ha sido restablecida correctamente! Ya puedes iniciar sesión.');
+        }
+
+        // 4. Respuesta de Error (Traducida manualmente)
+        $errorMessage = match ($status) {
+            Password::INVALID_USER => 'No encontramos un usuario registrado con ese correo electrónico.',
+            Password::INVALID_TOKEN => 'El enlace de recuperación es inválido o ha expirado. Solicita uno nuevo.',
+            default => 'Ocurrió un error inesperado al restablecer la contraseña.',
+        };
+
+        return back()
+            ->withInput($request->only('email'))
+            ->withErrors(['email' => $errorMessage]);
     }
 }

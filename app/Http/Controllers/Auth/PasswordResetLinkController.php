@@ -11,7 +11,7 @@ use Illuminate\View\View;
 class PasswordResetLinkController extends Controller
 {
     /**
-     * Display the password reset link request view.
+     * Muestra la vista para solicitar el enlace de recuperación.
      */
     public function create(): View
     {
@@ -19,26 +19,38 @@ class PasswordResetLinkController extends Controller
     }
 
     /**
-     * Handle an incoming password reset link request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
+     * Maneja la solicitud de envío del enlace de recuperación.
      */
     public function store(Request $request): RedirectResponse
     {
+        // 1. Validación con mensajes directos en español
         $request->validate([
             'email' => ['required', 'email'],
+        ], [
+            'email.required' => 'El campo de correo electrónico es obligatorio.',
+            'email.email'    => 'Por favor, introduce una dirección de correo válida.',
         ]);
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
+        // 2. Intentamos enviar el enlace
         $status = Password::sendResetLink(
             $request->only('email')
         );
 
-        return $status == Password::RESET_LINK_SENT
-                    ? back()->with('status', __($status))
-                    : back()->withInput($request->only('email'))
-                        ->withErrors(['email' => __($status)]);
+        // 3. Verificamos el estado y respondemos en español manualmente
+        if ($status == Password::RESET_LINK_SENT) {
+            return back()->with('status', '¡Te hemos enviado el enlace de recuperación a tu correo!');
+        }
+
+        // Si falló (generalmente porque el usuario no existe o hay que esperar)
+        // Determinamos el mensaje de error:
+        $errorMessage = match ($status) {
+            Password::INVALID_USER => 'No encontramos ningún usuario registrado con ese correo electrónico.',
+            Password::THROTTLED => 'Por favor, espera unos momentos antes de intentar de nuevo.',
+            default => 'Ocurrió un error al intentar enviar el enlace.',
+        };
+
+        return back()
+            ->withInput($request->only('email'))
+            ->withErrors(['email' => $errorMessage]);
     }
 }

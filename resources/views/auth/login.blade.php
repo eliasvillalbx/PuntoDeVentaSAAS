@@ -6,88 +6,108 @@
   <title>Iniciar sesión — POS Empresarial</title>
   <meta name="csrf-token" content="{{ csrf_token() }}">
 
-  {{-- Tailwind + tu app (ajusta si no usas Vite) --}}
-  @vite(['resources/css/app.css', 'resources/js/app.js'])
+  {{-- 1. IMPORTANTE: Cargar Iconos --}}
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
 
-  {{-- Alpine para toggle de contraseña (si no lo cargas en app.js, deja este CDN) --}}
+  {{-- Tailwind + Alpine --}}
+  @vite(['resources/css/app.css', 'resources/js/app.js'])
   <script defer src="https://unpkg.com/alpinejs"></script>
 
   <style>
     .card { background: #ffffff; }
-    .divider { height:1px;background:linear-gradient(90deg,rgba(0,0,0,.06),rgba(0,0,0,.02),rgba(0,0,0,.06)); }
+    .divider { height:1px; background:linear-gradient(90deg,rgba(0,0,0,.06),rgba(0,0,0,.02),rgba(0,0,0,.06)); }
+    /* Ajuste para alinear iconos verticalmente */
+    .material-symbols-outlined { font-size: 20px; vertical-align: bottom; }
   </style>
 </head>
 <body class="h-full antialiased text-slate-800">
   <main class="min-h-full">
     <div class="mx-auto flex min-h-screen max-w-7xl flex-col md:flex-row">
-      {{-- Columna izquierda: branding + mensaje de suscripción --}}
-      <section class="hidden md:flex md:w-1/2 items-center justify-center border-r border-slate-200/80 px-10">
+      
+      {{-- ================= Columna Izquierda (Branding) ================= --}}
+      <section class="hidden md:flex md:w-1/2 items-center justify-center border-r border-slate-200/80 px-10 bg-slate-50/30">
         <div class="w-full max-w-md">
-          <div class="mb-8">
-            {{-- Logo/Marca (placeholder) --}}
-            <div class="flex items-center gap-3">
-              <div class="h-10 w-10 rounded-lg bg-slate-900 text-white grid place-items-center">
-                <!-- ícono minimal POS -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 7h18M6 7v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7M8 11h8M8 15h5" />
-                </svg>
-              </div>
-              <div class="text-lg font-semibold">POS Empresarial</div>
+          
+          <div class="mb-10">
+            {{-- NUEVO LOGO --}}
+            <div class="flex items-center gap-3 select-none">
+                <div class="inline-flex flex-col items-start gap-0">
+                    <span class="text-3xl font-black text-slate-900 leading-none tracking-tighter">
+                        POS
+                    </span>
+                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-[0.25em] ml-0.5">
+                        Empresarial
+                    </span>
+                </div>
             </div>
           </div>
 
-          <h1 class="text-3xl font-semibold tracking-tight text-slate-900">
-            Acceso seguro a tu plataforma
+          <h1 class="text-3xl font-bold tracking-tight text-slate-900">
+            Gestiona tu negocio<br>con inteligencia.
           </h1>
-          <p class="mt-3 text-slate-600">
-            Inicia sesión para gestionar ventas, inventario, clientes y reportes.
+          <p class="mt-4 text-slate-600 text-lg leading-relaxed">
+            Tu plataforma central para ventas, inventarios y clientes. Todo sincronizado en tiempo real.
           </p>
 
-          {{-- Mensaje de suscripción (sin métricas ni trust bar) --}}
-          <div class="mt-8 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
-            <p class="text-sm text-slate-700">
-              ¿Eres nuevo? <span class="font-medium">Registra tu empresa</span> o
-              <span class="font-medium">únete a una empresa existente</span>. Esto se manejará con códigos de invitación.
-            </p>
-            <div class="mt-4 flex flex-wrap gap-3">
-              @if (Route::has('register.company'))
-                <a href="{{ route('register.company') }}"
-                   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100">
-                  Registrar empresa
-                </a>
-              @endif
+          {{-- Mensaje de bienvenida / info --}}
+          <div class="mt-10 border-l-4 border-slate-900 pl-4">
+             <p class="text-sm font-medium text-slate-900">¿Eres nuevo aquí?</p>
+             <p class="text-sm text-slate-600 mt-1">
+                Solicita a tu administrador el código de acceso o registra tu empresa si eres el propietario.
+             </p>
+          </div>
 
-              @if (Route::has('register.member'))
-                <a href="{{ route('register.member') }}"
-                   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100">
-                  Unirme a una empresa
+          {{-- Botones de registro rápido --}}
+          <div class="mt-8 flex flex-wrap gap-3">
+             @if (Route::has('register.company'))
+                <a href="{{ route('register.company') }}"
+                   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+                   <span class="material-symbols-outlined text-slate-500">domain_add</span>
+                   Registrar empresa
                 </a>
-              @endif
-            </div>
+             @endif
+
+             @if (Route::has('register.member'))
+                <a href="{{ route('register.member') }}"
+                   class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+                   <span class="material-symbols-outlined text-slate-500">group_add</span>
+                   Unirme a equipo
+                </a>
+             @endif
           </div>
         </div>
       </section>
 
-      {{-- Columna derecha: formulario de login --}}
-      <section class="flex w-full md:w-1/2 items-center justify-center px-6 sm:px-8">
+      {{-- ================= Columna Derecha (Login Form) ================= --}}
+      <section class="flex w-full md:w-1/2 items-center justify-center px-6 sm:px-8 py-10">
         <div class="w-full max-w-md">
-          <div class="mb-6">
-            <h2 class="text-2xl font-semibold text-slate-900">Iniciar sesión</h2>
-            <p class="mt-1 text-sm text-slate-600">Introduce tus credenciales para continuar.</p>
+            
+          {{-- Logo visible solo en móvil --}}
+          <div class="md:hidden mb-8 text-center">
+             <span class="text-2xl font-black text-slate-900 tracking-tighter">POS</span>
+             <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Empresarial</span>
           </div>
 
-          {{-- Estado de sesión (p. ej., enlace enviado) --}}
+          <div class="mb-8">
+            <h2 class="text-2xl font-bold text-slate-900">Bienvenido de nuevo</h2>
+            <p class="mt-2 text-sm text-slate-600">Ingresa tus credenciales para acceder al panel.</p>
+          </div>
+
+          {{-- Mensajes de estado --}}
           @if (session('status'))
-            <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              {{ session('status') }}
+            <div class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex items-center gap-2">
+               <span class="material-symbols-outlined">check_circle</span>
+               <span>{{ session('status') }}</span>
             </div>
           @endif
 
-          {{-- Resumen de errores --}}
           @if ($errors->any())
-            <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              <div class="font-medium">No pudimos iniciar sesión:</div>
-              <ul class="mt-2 list-disc pl-5">
+            <div class="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div class="font-bold flex items-center gap-2 mb-1">
+                 <span class="material-symbols-outlined text-red-600">error</span>
+                 Error de acceso
+              </div>
+              <ul class="list-disc pl-8 space-y-1">
                 @foreach ($errors->all() as $error)
                   <li>{{ $error }}</li>
                 @endforeach
@@ -95,124 +115,86 @@
             </div>
           @endif
 
-          <div class="card rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div class="card rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
             <form method="POST" action="{{ route('login') }}" x-data="{ show: false }" novalidate class="space-y-5">
               @csrf
 
               {{-- EMAIL --}}
               <div>
-                <label for="email" class="block text-sm font-medium text-slate-700">Correo electrónico</label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  inputmode="email"
-                  autocomplete="username"
-                  required
-                  value="{{ old('email') }}"
-                  placeholder="tucorreo@empresa.com"
-                  class="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-blue-500"
-                >
-                @error('email')
-                  <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                @enderror
+                <label for="email" class="block text-sm font-semibold text-slate-700 mb-1.5">Correo electrónico</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span class="material-symbols-outlined text-slate-400">mail</span>
+                    </div>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      inputmode="email"
+                      required
+                      value="{{ old('email') }}"
+                      placeholder="nombre@empresa.com"
+                      class="block w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 py-2.5 text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 outline-none transition-all sm:text-sm"
+                    >
+                </div>
               </div>
 
-              {{-- PASSWORD + toggle --}}
+              {{-- PASSWORD --}}
               <div>
-                <div class="flex items-center justify-between">
-                  <label for="password" class="block text-sm font-medium text-slate-700">Contraseña</label>
+                <div class="flex items-center justify-between mb-1.5">
+                  <label for="password" class="block text-sm font-semibold text-slate-700">Contraseña</label>
                   @if (Route::has('password.request'))
                     <a href="{{ route('password.request') }}"
-                       class="text-sm text-slate-700 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded">
+                       class="text-xs font-medium text-slate-500 hover:text-slate-800 hover:underline">
                       ¿Olvidaste tu contraseña?
                     </a>
                   @endif
                 </div>
-
-                <div class="relative mt-1">
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autocomplete="current-password"
-                    required
-                    placeholder="••••••••"
-                    x-bind:type="show ? 'text' : 'password'"
-                    class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 text-slate-900 placeholder-slate-400 shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-blue-500"
-                  >
-                  <button
-                    type="button"
-                    @click="show = !show"
-                    class="absolute inset-y-0 right-0 mr-2 inline-flex items-center rounded-md px-2 text-slate-500 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    x-bind:aria-label="show ? 'Ocultar contraseña' : 'Mostrar contraseña'"
-                  >
-                    <svg x-show="!show" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z" />
-                      <circle cx="12" cy="12" r="3" stroke-width="1.8"></circle>
-                    </svg>
-                    <svg x-show="show" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13.875 18.825A10.05 10.05 0 0 1 12 19c-5.5 0-9-7-9-7a19.6 19.6 0 0 1-3.147 4.017M3 3l18 18" />
-                    </svg>
-                  </button>
+                
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span class="material-symbols-outlined text-slate-400">lock</span>
+                    </div>
+                    <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        x-bind:type="show ? 'text' : 'password'"
+                        class="block w-full rounded-lg border border-slate-300 bg-white pl-10 pr-10 py-2.5 text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 outline-none transition-all sm:text-sm"
+                    >
+                    <button
+                        type="button"
+                        @click="show = !show"
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                        <span class="material-symbols-outlined" x-text="show ? 'visibility_off' : 'visibility'"></span>
+                    </button>
                 </div>
-                @error('password')
-                  <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
-                @enderror
               </div>
 
-              {{-- REMEMBER + registro general (opcional) --}}
-              <div class="flex items-center justify-between">
-                <label for="remember_me" class="inline-flex items-center gap-2">
-                  <input id="remember_me" name="remember" type="checkbox"
-                         class="rounded border-slate-300 text-blue-600 shadow-sm focus:ring-blue-500">
-                  <span class="text-sm text-slate-700">Recordarme</span>
+              {{-- REMEMBER ME --}}
+              <div class="flex items-center">
+                <input id="remember_me" name="remember" type="checkbox"
+                       class="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500 cursor-pointer">
+                <label for="remember_me" class="ml-2 block text-sm text-slate-600 cursor-pointer select-none">
+                  Mantener sesión iniciada
                 </label>
-
-                @if (Route::has('register'))
-                  <a href="{{ route('register') }}" class="text-sm text-slate-700 hover:text-slate-900">
-                    Crear cuenta
-                  </a>
-                @endif
               </div>
 
               {{-- SUBMIT --}}
-              <div class="pt-1">
-                <button type="submit"
-                        class="inline-flex h-11 w-full items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-medium text-white shadow hover:bg-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                  Entrar
-                </button>
-              </div>
+              <button type="submit"
+                      class="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-all">
+                Ingresar al sistema
+                <span class="material-symbols-outlined text-[18px]">login</span>
+              </button>
             </form>
           </div>
-
-          {{-- separador sutil --}}
-          <div class="my-6 divider"></div>
-
-          {{-- CTA suscripción móvil (visible en pantallas pequeñas) --}}
-          <div class="md:hidden">
-            <div class="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
-              <p class="text-sm text-slate-700">
-                ¿Eres nuevo? <span class="font-medium">Registra tu empresa</span> o
-                <span class="font-medium">únete a una empresa existente</span>.
-              </p>
-              <div class="mt-4 flex flex-wrap gap-3">
-                @if (Route::has('register.company'))
-                  <a href="{{ route('register.company') }}"
-                     class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100">
-                    Registrar empresa
-                  </a>
-                @endif
-
-                @if (Route::has('register.member'))
-                  <a href="{{ route('register.member') }}"
-                     class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100">
-                    Unirme a una empresa
-                  </a>
-                @endif
-              </div>
-            </div>
-          </div>
+          
+          <p class="mt-6 text-center text-xs text-slate-400">
+            &copy; {{ date('Y') }} POS Empresarial. Todos los derechos reservados.
+          </p>
 
         </div>
       </section>

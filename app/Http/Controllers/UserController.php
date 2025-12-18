@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\User;
@@ -16,9 +17,15 @@ class UserController extends Controller
 
         $query = User::with(['empresa', 'roles']);
 
-        // Filtro por Rol de visualización
+        // --- LÓGICA DE VISIBILIDAD ---
         if (!$isSA) {
+            // 1. Solo ver usuarios de mi empresa
             $query->deEmpresa($user->id_empresa);
+
+            // 2. NUEVO: Ocultar a los SuperAdmins (Solo SA pueden ver otros SA)
+            $query->whereDoesntHave('roles', function ($q) {
+                $q->where('name', 'superadmin');
+            });
         }
 
         // Buscador
@@ -45,13 +52,23 @@ class UserController extends Controller
     {
         $isSA = auth()->user()->hasRole('superadmin');
         $empresas = $isSA ? Empresa::all() : [];
-        $roles = Role::all(); // O filtrar los roles que un admin puede asignar
+        
+        // Filtrar roles: Si no es SA, quitamos la opción de crear un 'superadmin'
+        $roles = Role::all();
+        if (!$isSA) {
+            $roles = $roles->reject(fn($r) => $r->name === 'superadmin');
+        }
         
         return view('users.create', compact('empresas', 'roles', 'isSA'));
     }
 
     public function store(Request $request)
     {
+        // Validación extra: Si no es SA y trata de inyectar el rol superadmin, abortamos
+        if (!auth()->user()->hasRole('superadmin') && $request->role === 'superadmin') {
+            abort(403, 'No tienes permiso para crear Super Administradores.');
+        }
+
         $validated = $request->validate([
             'nombre' => 'required|string|max:255',
             'apellido_paterno' => 'required|string|max:255',
@@ -80,13 +97,23 @@ class UserController extends Controller
 
         $isSA = auth()->user()->hasRole('superadmin');
         $empresas = $isSA ? Empresa::all() : [];
+        
+        // Filtrar roles en edición también
         $roles = Role::all();
+        if (!$isSA) {
+            $roles = $roles->reject(fn($r) => $r->name === 'superadmin');
+        }
         
         return view('users.edit', compact('user', 'empresas', 'roles', 'isSA'));
     }
 
     public function update(Request $request, User $user)
     {
+        // Validación extra de seguridad de rol
+        if (!auth()->user()->hasRole('superadmin') && $request->role === 'superadmin') {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'nombre' => 'required|string|max:255',
             'email' => "required|email|unique:users,email,{$user->id}",
@@ -107,6 +134,11 @@ class UserController extends Controller
 
     public function destroy(User $user)
     {
+        // NUEVO: Evitar auto-eliminación
+        if (auth()->id() === $user->id) {
+            return back()->with('error', 'No puedes eliminar tu propia cuenta mientras estás logueado.');
+        }
+
         $user->delete();
         return back()->with('success', 'Usuario eliminado.');
     }

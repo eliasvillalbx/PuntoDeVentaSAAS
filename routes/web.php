@@ -105,13 +105,22 @@ Route::middleware(['auth'])->group(function () {
     Route::post('ventas/{venta}/convertir', [VentaController::class, 'convertirPrefactura'])->name('ventas.convertirPrefactura');
     Route::get('ventas/{venta}/pdf', [VentaController::class, 'pdf'])->name('ventas.pdf');
 
+    /* =========================================================================
+     * ✅ GESTIÓN DE USUARIOS (NO CORROMPE: SOLO SE MUEVE AQUÍ)
+     * - Acceso: superadmin | administrador_empresa | gerente
+     * - Requiere suscripción activa
+     * - El controlador decide qué puede ver/crear/editar cada rol
+     * ========================================================================= */
+    Route::middleware(['suscripcion.activa', 'role:superadmin|administrador_empresa|gerente'])->group(function () {
+        Route::resource('users', UserController::class)->except(['show']); // (show no lo usas; si lo quieres, quita el except)
+    });
 
     /* =========================================================================
      * ZONA SUPERADMIN
      * ========================================================================= */
     Route::middleware(['role:superadmin'])->group(function () {
-        
-        Route::resource('users', UserController::class);
+
+        // ✅ OJO: QUITAMOS users de aquí (ya está arriba en su grupo correcto)
 
         // Backups (PRESERVADO)
         Route::get('/backups', [BackupController::class, 'index'])->name('backups.index');
@@ -153,7 +162,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/chat/conversations-json', [ChatController::class, 'listConversations'])->name('chat.conversations.json');
         Route::post('/chat/conversations', [ChatController::class, 'storeConversation'])->name('chat.conversations.store');
         Route::get('/chat/conversations/{conversation}/messages', [ChatController::class, 'messages'])->name('chat.messages.index');
-        Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'sendMessage'])->name('chat.messages.store');    
+        Route::post('/chat/conversations/{conversation}/messages', [ChatController::class, 'sendMessage'])->name('chat.messages.store');
     });
 
     /* =========================================================================
@@ -184,7 +193,7 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('categorias', CategoriaController::class)->parameters(['categorias' => 'categoria']);
         Route::resource('productos', ProductoController::class)->parameters(['productos' => 'producto']);
         Route::resource('proveedores', ProveedorController::class)->parameters(['proveedores' => 'proveedore']);
-        
+
         // Pivotes
         Route::post('productos/{producto}/proveedores', [ProductoProveedorController::class, 'store'])->name('productos.proveedores.store');
         Route::put('productos/{producto}/proveedores/{proveedor}', [ProductoProveedorController::class, 'update'])->name('productos.proveedores.update');

@@ -13,24 +13,30 @@ use Illuminate\Support\Facades\Log;
 class BillingController extends Controller
 {
     /**
-     * Pantalla de aviso de suscripción inactiva/vencida.
+     * Muestra la pantalla de aviso cuando la suscripción está inactiva o vencida.
+     * Recupera datos de la empresa y los planes de pago disponibles.
      */
     public function alert(Request $request)
     {
+        // 1. Obtiene el usuario actual
         $user = Auth::user();
 
+        // 2. Busca la empresa asociada al usuario
         $empresaId = (int) data_get($user, 'id_empresa');
         $empresa   = $empresaId > 0 ? Empresa::find($empresaId) : null;
 
+        // 3. Verifica si existe una suscripción previa
         $suscripcion = null;
         if ($empresa) {
             $suscripcion = Suscripcion::deEmpresa($empresa->id)
-                ->orderByDesc('fecha_vencimiento')
+                ->orderByDesc('fecha_vencimiento') // Obtiene la más reciente
                 ->first();
         }
 
+        // 4. Carga los planes de precios desde la configuración
         $plans = config('clip.plans', []);
 
+        // 5. Retorna la vista con la información necesaria
         return view('billing.alert', [
             'empresa'     => $empresa,
             'suscripcion' => $suscripcion,

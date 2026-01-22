@@ -5,170 +5,333 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Empresa;
 use Illuminate\Http\Request;
-use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB; // <--- Importante para transacciones
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
+use App\Mail\UserCredentialsMail;
 
 class UserController extends Controller
 {
+    /**
+     * Roles existentes en el sistema (sembrados por tu seeder)
+     */
+    private const ROLES = [
+        'superadmin',
+        'administrador_empresa',
+        'gerente',
+        'vendedor',
+    ];
+
+    /**
+     * Jerarquía EXACTA solicitada:
+     * superadmin: todos
+     * administrador_empresa: gerentes, vendedores
+     * gerente: vendedores
+     * vendedor: nada
+     */
+    private const CAN_MANAGE = [
+        'superadmin' => ['superadmin', 'administrador_empresa', 'gerente', 'vendedor'],
+        'administrador_empresa' => ['gerente', 'vendedor'],
+        'gerente' => ['vendedor'],
+        'vendedor' => [],
+    ];
+
+    public function __construct()
+    {
+        $this->middleware('auth');
+
+        // ✅ Solo superadmin, administrador_empresa y gerente pueden acceder al módulo
+        $this->middleware(function ($request, $next) {
+            $u = auth()->user();
+
+            if (!$u || !($u->hasRole('superadmin') || $u->hasRole('administrador_empresa') || $u->hasRole('gerente'))) {
+                abort(403, 'No tienes permiso para acceder a la gestión de usuarios.');
+            }
+
+            return $next($request);
+        });
+    }
+
+    /**
+     * Devuelve el rol principal del usuario (según prioridad)
+     */
+    private function primaryRole(User $u): string
+    {
+        foreach (['superadmin', 'administrador_empresa', 'gerente', 'vendedor'] as $r) {
+            if ($u->hasRole($r)) return $r;
+        }
+        return '';
+    }
+
+    /**
+     * Qué roles puede ADMINISTRAR (crear/editar/asignar) el usuario autenticado
+     */
+    private function manageableRoles(User $auth): array
+    {
+        $role = $this->primaryRole($auth);
+        return self::CAN_MANAGE[$role] ?? [];
+    }
+
+    /**
+     * Qué roles puede VER en el LISTADO
+     * (normalmente coincide con manageableRoles, pero lo dejamos explícito para no romper lógica)
+     */
+    private function visibleRoles(User $auth): array
+    {
+        // EXACTO a tu regla:
+        // SA -> todos
+        // admin_empresa -> gerentes, vendedores
+        // gerente -> vendedores
+        $role = $this->primaryRole($auth);
+
+        return match ($role) {
+            'superadmin' => ['superadmin', 'administrador_empresa', 'gerente', 'vendedor'],
+            'administrador_empresa' => ['gerente', 'vendedor'],
+            'gerente' => ['vendedor'],
+            default => [],
+        };
+    }
+
+    /**
+     * Verifica si el usuario autenticado puede administrar a un usuario objetivo
+     */
+    private function canManageUser(User $auth, User $target): bool
+    {
+        // SA puede todo
+        if ($auth->hasRole('superadmin')) return true;
+
+        // No SA solo su empresa
+        if ((int)$target->id_empresa !== (int)$auth->id_empresa) return false;
+
+        // Rol objetivo debe estar dentro de la lista manejable
+        $targetRole = $this->primaryRole($target);
+        return in_array($targetRole, $this->manageableRoles($auth), true);
+    }
+
+    /**
+     * Valida que el rol solicitado para asignación esté permitido según el rol del auth
+     */
+    private function assertCanAssignRole(User $auth, string $roleToAssign): void
+    {
+        if (!in_array($roleToAssign, self::ROLES, true)) {
+            abort(422, 'Rol inválido.');
+        }
+
+        if (!in_array($roleToAssign, $this->manageableRoles($auth), true)) {
+            abort(403, 'No tienes permiso para asignar ese rol.');
+        }
+    }
+
     public function index(Request $request)
     {
-        $user = auth()->user();
-        $isSA = $user->hasRole('superadmin');
+        $auth = auth()->user();
+        $isSA = $auth->hasRole('superadmin');
 
         $query = User::with(['empresa', 'roles']);
 
-        // --- LÓGICA DE VISIBILIDAD ---
+        // --- VISIBILIDAD BASE: empresa ---
         if (!$isSA) {
-            // 1. Solo ver usuarios de mi empresa
-            $query->deEmpresa($user->id_empresa);
+            $query->where('id_empresa', $auth->id_empresa);
+        }
 
-            // 2. Ocultar a los SuperAdmins (Solo SA pueden ver otros SA)
-            $query->whereDoesntHave('roles', function ($q) {
-                $q->where('name', 'superadmin');
+        // --- VISIBILIDAD POR ROLES (NO por "manageable" a secas, sino por tu regla explícita) ---
+        $visibleRoles = $this->visibleRoles($auth);
+
+        if (empty($visibleRoles)) {
+            $query->whereRaw('1=0');
+        } else {
+            $query->whereHas('roles', function ($q) use ($visibleRoles) {
+                $q->whereIn('name', $visibleRoles);
             });
         }
 
-        // Buscador
-        if ($request->q) {
-            $query->where(function($q) use ($request) {
-                $q->where('nombre', 'like', "%{$request->q}%")
-                  ->orWhere('apellido_paterno', 'like', "%{$request->q}%")
-                  ->orWhere('email', 'like', "%{$request->q}%");
+        // --- BUSCADOR ---
+        if ($request->filled('q')) {
+            $search = trim($request->q);
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre', 'like', "%{$search}%")
+                    ->orWhere('apellido_paterno', 'like', "%{$search}%")
+                    ->orWhere('apellido_materno', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
-        // Filtro por Empresa (Solo SA)
-        if ($isSA && $request->empresa_id) {
+        // --- FILTRO EMPRESA (solo SA) ---
+        if ($isSA && $request->filled('empresa_id')) {
             $query->where('id_empresa', $request->empresa_id);
         }
 
-        $users = $query->latest()->paginate(10);
-        $empresas = $isSA ? Empresa::all() : [];
+        $users = $query->latest()->paginate(10)->withQueryString();
 
-        return view('users.index', compact('users', 'empresas', 'isSA'));
+        $empresas = $isSA ? Empresa::orderBy('razon_social')->get() : collect();
+        $miEmpresa = !$isSA ? Empresa::find($auth->id_empresa) : null;
+
+        return view('users.index', compact('users', 'empresas', 'isSA', 'miEmpresa'));
     }
 
     public function create()
     {
-        $isSA = auth()->user()->hasRole('superadmin');
-        $empresas = $isSA ? Empresa::all() : [];
-        
-        // Filtrar roles: Si no es SA, quitamos la opción de crear un 'superadmin'
-        $roles = Role::all();
-        if (!$isSA) {
-            $roles = $roles->reject(fn($r) => $r->name === 'superadmin');
-        }
-        
-        return view('users.create', compact('empresas', 'roles', 'isSA'));
+        $auth = auth()->user();
+        $isSA = $auth->hasRole('superadmin');
+
+        // Roles disponibles según jerarquía
+        $allowed = $this->manageableRoles($auth);
+        $roles = Role::whereIn('name', $allowed)->orderBy('name')->get();
+
+        $empresas = $isSA ? Empresa::orderBy('razon_social')->get() : collect();
+        $miEmpresa = !$isSA ? Empresa::find($auth->id_empresa) : null;
+
+        return view('users.create', compact('empresas', 'roles', 'isSA', 'miEmpresa'));
     }
 
     public function store(Request $request)
     {
-        // Validación extra: Si no es SA y trata de inyectar el rol superadmin, abortamos
-        if (!auth()->user()->hasRole('superadmin') && $request->role === 'superadmin') {
-            abort(403, 'No tienes permiso para crear Super Administradores.');
-        }
+        $auth = auth()->user();
+        $isSA = $auth->hasRole('superadmin');
 
-        $validated = $request->validate([
+        $rules = [
             'nombre' => 'required|string|max:255',
             'apellido_paterno' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:8',
-            'id_empresa' => auth()->user()->hasRole('superadmin') ? 'required' : 'nullable',
-            'role' => 'required'
-        ]);
+            'apellido_materno' => 'nullable|string|max:255',
+            'telefono' => 'nullable|string|max:30',
+            'email' => 'required|email|max:255|unique:users,email',
+            'role' => 'required|string',
+        ];
 
-        $validated['id_empresa'] = auth()->user()->hasRole('superadmin') 
-            ? $request->id_empresa 
-            : auth()->user()->id_empresa;
+        if ($isSA) {
+            $rules['id_empresa'] = 'required|exists:empresas,id';
+        }
 
-        $user = User::create($validated);
-        $user->assignRole($request->role);
+        $validated = $request->validate($rules);
 
-        return redirect()->route('users.index')->with('success', 'Usuario creado.');
+        // ✅ Autoriza rol por jerarquía
+        $this->assertCanAssignRole($auth, $validated['role']);
+
+        $idEmpresaFinal = $isSA ? (int)$request->id_empresa : (int)$auth->id_empresa;
+
+        // ✅ Contraseña temporal
+        $plainPassword = Str::password(12, true, true, true, false);
+
+        DB::beginTransaction();
+
+        try {
+            $user = new User();
+            $user->nombre = $validated['nombre'];
+            $user->apellido_paterno = $validated['apellido_paterno'];
+            $user->apellido_materno = $validated['apellido_materno'] ?? null;
+            $user->telefono = $validated['telefono'] ?? null;
+            $user->email = $validated['email'];
+            $user->id_empresa = $idEmpresaFinal;
+            $user->password = Hash::make($plainPassword);
+            $user->save();
+
+            $user->syncRoles([$validated['role']]);
+
+            // ✅ Enviar credenciales (no rompe si falla)
+            try {
+                Mail::to($user->email)->send(new UserCredentialsMail(
+                    nombre: $user->nombre,
+                    email: $user->email,
+                    password: $plainPassword
+                ));
+            } catch (\Throwable $mailEx) {
+                report($mailEx);
+            }
+
+            DB::commit();
+
+            return redirect()->route('users.index')
+                ->with('success', 'Usuario creado. Se enviaron credenciales al correo.');
+
+        } catch (QueryException $e) {
+            DB::rollBack();
+            if ($e->getCode() === "23000") {
+                return back()->withInput()->with('error', 'No se pudo crear el usuario. El correo ya existe.');
+            }
+            report($e);
+            return back()->withInput()->with('error', 'Error de base de datos al crear el usuario.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+            return back()->withInput()->with('error', 'Ocurrió un error inesperado al crear el usuario.');
+        }
     }
 
     public function edit(User $user)
     {
-        // Seguridad: No editar usuarios de otra empresa si no es SA
-        if (!auth()->user()->hasRole('superadmin') && $user->id_empresa !== auth()->user()->id_empresa) {
-            abort(403);
+        $auth = auth()->user();
+        $isSA = $auth->hasRole('superadmin');
+
+        if (!$this->canManageUser($auth, $user)) {
+            abort(403, 'No tienes permiso para editar este usuario.');
         }
 
-        $isSA = auth()->user()->hasRole('superadmin');
-        $empresas = $isSA ? Empresa::all() : [];
-        
-        // Filtrar roles en edición también
-        $roles = Role::all();
-        if (!$isSA) {
-            $roles = $roles->reject(fn($r) => $r->name === 'superadmin');
-        }
-        
-        return view('users.edit', compact('user', 'empresas', 'roles', 'isSA'));
+        $allowed = $this->manageableRoles($auth);
+        $roles = Role::whereIn('name', $allowed)->orderBy('name')->get();
+
+        $empresas = $isSA ? Empresa::orderBy('razon_social')->get() : collect();
+        $miEmpresa = !$isSA ? Empresa::find($auth->id_empresa) : null;
+
+        return view('users.edit', compact('user', 'empresas', 'roles', 'isSA', 'miEmpresa'));
     }
 
     public function update(Request $request, User $user)
     {
-        // Validación extra de seguridad de rol
-        if (!auth()->user()->hasRole('superadmin') && $request->role === 'superadmin') {
+        $auth = auth()->user();
+        $isSA = $auth->hasRole('superadmin');
+
+        if (!$this->canManageUser($auth, $user)) {
             abort(403);
         }
 
-        $validated = $request->validate([
+        $rules = [
             'nombre' => 'required|string|max:255',
-            'email' => "required|email|unique:users,email,{$user->id}",
-            'role' => 'required'
-        ]);
+            'apellido_paterno' => 'required|string|max:255',
+            'apellido_materno' => 'nullable|string|max:255',
+            'telefono' => 'nullable|string|max:30',
+            'email' => "required|email|max:255|unique:users,email,{$user->id}",
+            'role' => 'required|string',
+        ];
 
-        if ($request->filled('password')) {
-            $validated['password'] = $request->password;
-        } else {
-            unset($validated['password']);
+        if ($isSA) {
+            $rules['id_empresa'] = 'required|exists:empresas,id';
         }
 
-        $user->update($validated);
-        $user->syncRoles($request->role);
+        $validated = $request->validate($rules);
 
-        return redirect()->route('users.index')->with('success', 'Usuario actualizado.');
-    }
+        $this->assertCanAssignRole($auth, $validated['role']);
 
-    public function destroy(User $user)
-    {
-        // 1. Evitar auto-eliminación
-        if (auth()->id() === $user->id) {
-            return back()->with('error', 'No puedes eliminar tu propia cuenta mientras estás logueado.');
-        }
-
-        // 2. INICIAMOS TRANSACCIÓN
-        // Esto asegura que si falla el delete, se revierta cualquier cambio en roles
         DB::beginTransaction();
 
         try {
-            // Intentamos eliminar
-            $user->delete();
+            $user->nombre = $validated['nombre'];
+            $user->apellido_paterno = $validated['apellido_paterno'];
+            $user->apellido_materno = $validated['apellido_materno'] ?? null;
+            $user->telefono = $validated['telefono'] ?? null;
+            $user->email = $validated['email'];
 
-            // Si llegamos aquí, todo salió bien
-            DB::commit();
-            
-            return back()->with('success', 'Usuario eliminado correctamente.');
-
-        } catch (QueryException $e) {
-            // REVERTIMOS CAMBIOS (Devuelve los roles si se hubieran quitado)
-            DB::rollBack();
-
-            // Error 1451: Integridad referencial (tiene compras/ventas asociadas)
-            if ($e->getCode() == "23000") {
-                return back()->with('error', 'No se puede eliminar el usuario porque tiene registros asociados (ventas, compras, etc.). Sus roles han sido restaurados.');
+            if ($isSA) {
+                $user->id_empresa = (int)$request->id_empresa;
             }
 
-            return back()->with('error', 'Ocurrió un error de base de datos inesperado.');
-            
-        } catch (\Exception $e) {
-            // Cualquier otro error
+            $user->save();
+            $user->syncRoles([$validated['role']]);
+
+            DB::commit();
+
+            return redirect()->route('users.index')->with('success', 'Usuario actualizado correctamente.');
+
+        } catch (QueryException $e) {
             DB::rollBack();
-            return back()->with('error', 'Ocurrió un error inesperado: ' . $e->getMessage());
+            report($e);
+            return back()->withInput()->with('error', 'Error de base de datos al actualizar el usuario.');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            report($e);
+            return back()->withInput()->with('error', 'Ocurrió un error inesperado al actualizar el usuario.');
         }
     }
 }

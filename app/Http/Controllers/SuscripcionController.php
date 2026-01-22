@@ -157,26 +157,37 @@ class SuscripcionController extends Controller
         }
     }
 
-    /** Renovación (pago exitoso después de vencer) */
+    /**
+     * Reactiva una suscripción vencida tras un pago exitoso.
+     * Calcula las nuevas fechas y cambia el estado a 'activa'.
+     */
     public function renew(Request $request, Suscripcion $suscripcion): RedirectResponse
     {
         try {
+            // 1. Validación de seguridad
+            // Impide renovar si la suscripción aún está vigente para evitar errores
             if ($suscripcion->estado !== 'vencida' && !$suscripcion->fecha_vencimiento->isPast()) {
                 return back()->withErrors('Solo puedes renovar suscripciones vencidas.');
             }
 
+            // 2. Cálculo de nuevas fechas
+            // El nuevo periodo inicia hoy mismo
             $inicio = now()->startOfDay();
+            // Calcula cuándo vencerá según el plan contratado (mensual/anual)
             $venc   = Suscripcion::calcularVencimiento($inicio, $suscripcion->plan);
 
+            // 3. Actualización en Base de Datos
             $suscripcion->update([
                 'fecha_inicio'      => $inicio->toDateTimeString(),
                 'fecha_vencimiento' => $venc->toDateTimeString(),
-                'estado'            => 'activa',
+                'estado'            => 'activa', // Restaura el acceso al usuario
                 'renovado'          => true,
             ]);
 
             return back()->with('success','Suscripción renovada.');
+            
         } catch (\Throwable $e) {
+            // 4. Manejo de errores internos
             Log::error('Error al renovar suscripción', ['e' => $e]);
             $msg = app()->environment('local') ? $e->getMessage() : 'No se pudo renovar.';
             return back()->withErrors($msg);

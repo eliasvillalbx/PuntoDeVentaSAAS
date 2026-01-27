@@ -20,6 +20,17 @@
           </form>
         @endif
 
+        {{-- ✅ Enviar Factura DEMO (XML+PDF por correo, sin PAC) --}}
+        <form method="POST"
+              action="{{ route('ventas.cfdiDemo.enviar', $venta) }}"
+              onsubmit="return confirm('¿Generar XML + PDF (DEMO) y enviarlo al correo del cliente?');">
+          @csrf
+          <button class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">
+            <span class="material-symbols-outlined mi text-base">mail</span>
+            Enviar factura DEMO
+          </button>
+        </form>
+
         {{-- Descargar PDF --}}
         <a href="{{ route('ventas.pdf', $venta) }}"
            target="_blank" rel="noopener"
@@ -181,6 +192,17 @@
           </button>
         </form>
       @endif
+
+      {{-- ✅ Enviar Factura DEMO (XML+PDF por correo, sin PAC) --}}
+      <form method="POST"
+            action="{{ route('ventas.cfdiDemo.enviar', $venta) }}"
+            onsubmit="return confirm('¿Generar XML + PDF (DEMO) y enviarlo al correo del cliente?');">
+        @csrf
+        <button class="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">
+          <span class="material-symbols-outlined mi text-base">mail</span>
+          Enviar factura DEMO
+        </button>
+      </form>
 
       <a href="{{ route('ventas.pdf', $venta) }}"
          target="_blank" rel="noopener"

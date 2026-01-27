@@ -119,6 +119,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('ventas/{venta}/convertir', [VentaController::class, 'convertirPrefactura'])->name('ventas.convertirPrefactura');
     Route::get('ventas/{venta}/pdf', [VentaController::class, 'pdf'])->name('ventas.pdf');
 
+    // ✅ SOLO AÑADIMOS ESTO (CFDI DEMO: XML+PDF+EMAIL, sin PAC)
+    Route::post('ventas/{venta}/cfdi-demo/enviar', [VentaController::class, 'enviarCfdiDemo'])
+        ->name('ventas.cfdiDemo.enviar');
+
     /* =========================================================================
      * ✅ GESTIÓN DE USUARIOS (NO CORROMPE: SOLO SE MUEVE AQUÍ)
      * - Acceso: superadmin | administrador_empresa | gerente

@@ -32,6 +32,58 @@
 </head>
 <body>
 
+  @php
+    // ===========================
+    // Cliente: nombre completo, RFC, teléfono (con fallbacks)
+    // ===========================
+    $cli = $venta->cliente;
+
+    // Nombre "bonito": si hay razón social úsala, si no arma nombre completo si existe, si no "Venta directa"
+    $clienteNombre = 'Venta directa';
+    if ($cli) {
+      $razon = trim((string)($cli->razon_social ?? ''));
+      $nombre = trim((string)($cli->nombre ?? ''));
+
+      // Algunas bases guardan apellidos separados
+      $apPat = trim((string)($cli->apellido_paterno ?? ''));
+      $apMat = trim((string)($cli->apellido_materno ?? ''));
+
+      // Si tu modelo tiene accessor nombre_completo, lo usa
+      $nombreCompleto = trim((string)($cli->nombre_completo ?? ''));
+      if ($nombreCompleto === '' && ($nombre !== '' || $apPat !== '' || $apMat !== '')) {
+        $nombreCompleto = trim($nombre.' '.$apPat.' '.$apMat);
+      }
+
+      $clienteNombre = $razon !== '' ? $razon : ($nombreCompleto !== '' ? $nombreCompleto : ($nombre !== '' ? $nombre : 'Cliente'));
+    }
+
+    // RFC: si no hay, genérico XAXX010101000
+    $rfcCliente = 'XAXX010101000';
+    if ($cli) {
+      $tmp = strtoupper(trim((string)($cli->rfc ?? '')));
+      if ($tmp !== '') $rfcCliente = $tmp;
+    }
+
+    // Teléfono: intenta varios campos comunes
+    $telCliente = null;
+    if ($cli) {
+      $candidatos = [
+        $cli->telefono ?? null,
+        $cli->tel ?? null,
+        $cli->celular ?? null,
+        $cli->movil ?? null,
+        $cli->phone ?? null,
+      ];
+      foreach ($candidatos as $t) {
+        $t = trim((string)$t);
+        if ($t !== '') { $telCliente = $t; break; }
+      }
+    }
+
+    // (Opcional) Email
+    $emailCliente = $cli ? trim((string)($cli->email ?? '')) : '';
+  @endphp
+
   {{-- Encabezado con logo y datos de empresa --}}
   <div class="grid mb-3">
     <div class="col w-50">
@@ -71,10 +123,27 @@
       <div class="mb-1"><strong>Vendedor:</strong>
         {{ $venta->usuario?->nombre_completo ?? ($venta->usuario?->nombre ?? '') }}
       </div>
+
       <div class="mb-1"><strong>Cliente:</strong>
-        {{ $venta->cliente?->nombre ?? $venta->cliente?->razon_social ?? 'Venta directa' }}
+        {{ $clienteNombre }}
       </div>
+
+      <div class="mb-1"><strong>RFC cliente:</strong>
+        {{ $rfcCliente }}
+      </div>
+
+      <div class="mb-1"><strong>Teléfono:</strong>
+        {{ $telCliente ?: 'N/D' }}
+      </div>
+
+      {{-- (Opcional) Email: descomenta si lo quieres ver en el PDF --}}
+      {{--
+      <div class="mb-1"><strong>Email:</strong>
+        {{ $emailCliente !== '' ? $emailCliente : 'N/D' }}
+      </div>
+      --}}
     </div>
+
     <div class="col w-50">
       @if(!empty($venta->observaciones))
         <div class="mb-1"><strong>Observaciones:</strong></div>

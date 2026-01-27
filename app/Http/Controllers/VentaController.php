@@ -8,11 +8,15 @@ use App\Models\Producto;
 use App\Models\Empresa;
 use App\Models\Cliente;
 use App\Models\User;
+use App\Mail\VentaCfdiDemoMail;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
+
 use Barryvdh\DomPDF\Facade\Pdf; // PDF facade
 use Throwable;
 
@@ -220,7 +224,7 @@ class VentaController extends Controller
             $venta->load([
                 'empresa:id,razon_social,nombre_comercial,rfc,sitio_web,logo_path',
                 'usuario:id,nombre,apellido_paterno,apellido_materno',
-                'cliente:id,nombre,razon_social',
+                'cliente:id,nombre,razon_social,email,rfc',
                 'detalle.producto:id,nombre'
             ]);
 
@@ -454,7 +458,94 @@ class VentaController extends Controller
     }
 
     /* =========================================================================
-     | Helpers privados (empresa, permisos, cálculo, logo)
+     | CFDI DEMO – Generar XML + PDF y enviarlo al correo del cliente
+     | - No timbra (sin PAC)
+     | - Si no hay email o RFC, muestra error
+     * ====================================================================== */
+    public function enviarCfdiDemo(Request $request, Venta $venta)
+    {
+        try {
+            $this->authorizeScopeVenta($venta, $request->user());
+
+            $venta->load([
+                'empresa',
+                'usuario',
+                'cliente',
+                'detalle.producto',
+            ]);
+
+            $cliente = $venta->cliente;
+            if (!$cliente) {
+                return back()->withErrors('No se puede enviar: la venta no tiene cliente asignado.');
+            }
+
+            $email = trim((string) ($cliente->email ?? ''));
+            $rfc   = strtoupper(trim((string) ($cliente->rfc ?? '')));
+
+            if ($email === '') {
+                return back()->withErrors('No se puede enviar: el cliente no tiene correo registrado.');
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return back()->withErrors('No se puede enviar: el correo del cliente no es válido.');
+            }
+            if ($rfc === '') {
+                return back()->withErrors('No se puede enviar: el cliente no tiene RFC registrado.');
+            }
+
+            // Validación simple de RFC (evita basura)
+            if (!preg_match('/^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/u', $rfc)) {
+                return back()->withErrors('No se puede enviar: el RFC del cliente no tiene formato válido.');
+            }
+
+            $empresa = $venta->empresa;
+            if (!$empresa) {
+                return back()->withErrors('No se puede enviar: la venta no tiene empresa asociada.');
+            }
+
+            // 1) XML DEMO
+            $xml = $this->buildCfdiXmlDemo($venta, $rfc);
+
+            // Guardar XML en storage (local)
+            $folder  = "cfdi_demo/ventas/{$venta->id}";
+            $xmlName = "CFDI_DEMO_venta-{$venta->id}.xml";
+            $xmlPath = "{$folder}/{$xmlName}";
+            Storage::disk('local')->put($xmlPath, $xml);
+
+            // 2) PDF (usa TU plantilla ventas.pdf)
+            $logoDataUri = $this->logoDataUri($empresa);
+
+            $pdf = Pdf::loadView('ventas.pdf', [
+                'venta'       => $venta,
+                'logoDataUri' => $logoDataUri,
+            ])->setPaper('letter', 'portrait');
+
+            $pdfName = "CFDI_DEMO_venta-{$venta->id}.pdf";
+            $pdfPath = "{$folder}/{$pdfName}";
+            Storage::disk('local')->put($pdfPath, $pdf->output());
+
+            // 3) Enviar correo
+            Mail::to($email)->send(new VentaCfdiDemoMail(
+                venta: $venta,
+                emailCliente: $email,
+                rfcCliente: $rfc,
+                xmlDisk: 'local',
+                xmlPath: $xmlPath,
+                pdfDisk: 'local',
+                pdfPath: $pdfPath
+            ));
+
+            return back()->with('status', "Factura DEMO enviada a {$email} (XML + PDF).");
+        } catch (Throwable $e) {
+            Log::error('Ventas.enviarCfdiDemo error', [
+                'venta_id' => $venta->id ?? null,
+                'e' => $e,
+            ]);
+            return back()->withErrors('No se pudo generar/enviar la factura DEMO: '.$e->getMessage());
+        }
+    }
+
+    /* =========================================================================
+     | Helpers privados (empresa, permisos, cálculo, logo, xml)
      * ====================================================================== */
 
     private function resolveEmpresaId(Request $request, User $user): int
@@ -592,5 +683,109 @@ class VentaController extends Controller
             Log::warning('Logo Data URI error', ['empresa' => $empresa->id ?? null, 'e' => $e->getMessage()]);
         }
         return null;
+    }
+
+    /**
+     * CFDI 4.0 DEMO (sin timbre).
+     * OJO: esto es para pruebas; NO es CFDI válido ante SAT hasta timbrado con PAC.
+     */
+    private function buildCfdiXmlDemo(Venta $venta, string $rfcCliente): string
+    {
+        $empresa = $venta->empresa;
+        $cliente = $venta->cliente;
+
+        $serie = 'D';
+        $folio = (string) $venta->id;
+        $fecha = now()->toAtomString(); // ISO 8601
+
+        $moneda = 'MXN';
+        $tipoDeComprobante = 'I'; // ingreso
+
+        // Campos emisor (con fallback)
+        $rfcEmisor = strtoupper(trim((string) ($empresa->rfc ?? 'AAA010101AAA')));
+        $nombreEmisor = trim((string) ($empresa->razon_social ?? $empresa->nombre_comercial ?? 'EMISOR DEMO'));
+        $regimenFiscalEmisor = trim((string) ($empresa->regimen_fiscal ?? '601')); // DEMO
+        $cpEmisor = trim((string) ($empresa->codigo_postal ?? '00000')); // DEMO
+
+        // Campos receptor (con fallback)
+        $nombreReceptor = trim((string) ($cliente->razon_social ?? $cliente->nombre ?? 'RECEPTOR DEMO'));
+        $usoCfdi = trim((string) ($cliente->uso_cfdi ?? 'G03')); // DEMO
+        $domicilioFiscalReceptor = trim((string) ($cliente->codigo_postal ?? '00000')); // DEMO
+        $regimenFiscalReceptor = trim((string) ($cliente->regimen_fiscal ?? '616')); // DEMO
+
+        $subtotal = number_format((float) $venta->subtotal, 2, '.', '');
+        $iva = number_format((float) $venta->iva, 2, '.', '');
+        $total = number_format((float) $venta->total, 2, '.', '');
+
+        $conceptosXml = '';
+        foreach ($venta->detalle as $d) {
+            $prodName = trim((string) ($d->producto?->nombre ?? 'Producto'));
+            $cantidad = number_format((float) $d->cantidad, 2, '.', '');
+            $valorUnitario = number_format((float) $d->precio_unitario, 2, '.', '');
+            $importe = number_format((float) $d->total_linea, 2, '.', '');
+
+            // DEMO catálogos
+            $claveProdServ = trim((string) ($d->clave_prod_serv ?? '01010101'));
+            $claveUnidad   = trim((string) ($d->clave_unidad ?? 'H87'));
+            $unidad        = trim((string) ($d->unidad ?? 'PZA'));
+
+            // IVA 16% simplificado
+            $base = $importe;
+            $tasa = '0.160000';
+            $importeIva = number_format(((float)$importe) * 0.16, 2, '.', '');
+
+            $conceptosXml .= '
+  <cfdi:Concepto ClaveProdServ="'.$this->xmlAttr($claveProdServ).'" Cantidad="'.$cantidad.'" ClaveUnidad="'.$this->xmlAttr($claveUnidad).'" Unidad="'.$this->xmlAttr($unidad).'"
+    Descripcion="'.$this->xmlAttr($prodName).'" ValorUnitario="'.$valorUnitario.'" Importe="'.$importe.'">
+    <cfdi:Impuestos>
+      <cfdi:Traslados>
+        <cfdi:Traslado Base="'.$base.'" Impuesto="002" TipoFactor="Tasa" TasaOCuota="'.$tasa.'" Importe="'.$importeIva.'"/>
+      </cfdi:Traslados>
+    </cfdi:Impuestos>
+  </cfdi:Concepto>';
+        }
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n".
+'<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd"
+  Version="4.0"
+  Serie="'.$this->xmlAttr($serie).'"
+  Folio="'.$this->xmlAttr($folio).'"
+  Fecha="'.$this->xmlAttr($fecha).'"
+  SubTotal="'.$subtotal.'"
+  Moneda="'.$this->xmlAttr($moneda).'"
+  Total="'.$total.'"
+  TipoDeComprobante="'.$this->xmlAttr($tipoDeComprobante).'"
+  Exportacion="01"
+  LugarExpedicion="'.$this->xmlAttr($cpEmisor).'">
+
+  <cfdi:Emisor Rfc="'.$this->xmlAttr($rfcEmisor).'" Nombre="'.$this->xmlAttr($nombreEmisor).'" RegimenFiscal="'.$this->xmlAttr($regimenFiscalEmisor).'"/>
+
+  <cfdi:Receptor Rfc="'.$this->xmlAttr($rfcCliente).'" Nombre="'.$this->xmlAttr($nombreReceptor).'" DomicilioFiscalReceptor="'.$this->xmlAttr($domicilioFiscalReceptor).'"
+    RegimenFiscalReceptor="'.$this->xmlAttr($regimenFiscalReceptor).'" UsoCFDI="'.$this->xmlAttr($usoCfdi).'"/>
+
+  <cfdi:Conceptos>
+'.$conceptosXml.'
+  </cfdi:Conceptos>
+
+  <cfdi:Impuestos TotalImpuestosTrasladados="'.$iva.'">
+    <cfdi:Traslados>
+      <cfdi:Traslado Base="'.$subtotal.'" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="'.$iva.'"/>
+    </cfdi:Traslados>
+  </cfdi:Impuestos>
+
+  <!-- DEMO: SIN TIMBRE FISCAL. Este XML NO es válido ante SAT hasta timbrarse con un PAC. -->
+</cfdi:Comprobante>';
+
+        return $xml;
+    }
+
+    /**
+     * Escape seguro para atributos XML.
+     */
+    private function xmlAttr(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_XML1, 'UTF-8');
     }
 }

@@ -24,6 +24,29 @@ class SuscripcionController extends Controller
         // $this->middleware('can:suscripciones.eliminar')->only(['destroy']);
     }
 
+
+    public static function calcularVencimiento(Carbon $inicio, string $plan): Carbon
+{
+    $plan = strtolower($plan);
+
+    $months = match ($plan) {
+        // UI
+        'mensual'     => 1,
+        'trimestral'  => 3,
+        'anual'       => 12,
+
+        // BD enum
+        '1_mes'       => 1,
+        '6_meses'     => 6,
+        '1_año'       => 12,
+        '3_años'      => 36,
+
+        default       => 1,
+    };
+
+    return (clone $inicio)->addMonthsNoOverflow($months);
+}
+
     public function index(Request $request)
     {
         $qEmpresa = (int) $request->integer('empresa_id');

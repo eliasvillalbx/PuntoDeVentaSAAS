@@ -28,6 +28,7 @@ use App\Http\Controllers\UserController;
 // Controladores de utilidades y pagos
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\ClipWebhookController;
+use App\Http\Controllers\StripeWebhookController; // ✅ AGREGADO (Stripe)
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\ReporteController; // <--- Importación correcta (Singular)
 
@@ -57,6 +58,11 @@ Route::post('/clip/webhook', [ClipWebhookController::class, 'handle'])
 Route::post('/webhooks/clip-checkout', [ClipWebhookController::class, 'handle'])
     ->name('clip.webhook.alt'); // Cambié nombre levemente para evitar colisión si usas cache de rutas
 
+/* ==================== Webhooks Stripe (Sin Auth) ==================== */
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])
+    ->name('stripe.webhook')
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]); // ✅ AGREGADO (Stripe)
+
 /* =========================================================================
  * RUTAS PROTEGIDAS (AUTH)
  * ========================================================================= */
@@ -67,7 +73,15 @@ Route::middleware(['auth'])->group(function () {
 
     /* ---------- Billing / Pagos ---------- */
     Route::get('/billing/alert', [BillingController::class, 'alert'])->name('billing.alert');
+
+    // ✅ CLIP (PRESERVADO - NO SE ELIMINA)
     Route::post('/billing/checkout', [BillingController::class, 'createCheckout'])->name('billing.clip.checkout');
+
+    // ✅ STRIPE (AGREGADO - NO ROMPE LO ANTERIOR)
+    Route::post('/billing/stripe/checkout', [BillingController::class, 'createStripeCheckout'])->name('billing.stripe.checkout');
+    Route::get('/billing/stripe/success', [BillingController::class, 'stripeSuccess'])->name('billing.stripe.success');
+    Route::get('/billing/stripe/cancel', [BillingController::class, 'stripeCancel'])->name('billing.stripe.cancel');
+
     Route::post('/suscripciones', [SuscripcionController::class, 'store'])->name('suscripciones.store');
     Route::post('/suscripciones/{suscripcion}/renew', [SuscripcionController::class, 'renew'])->name('suscripciones.renew');
 

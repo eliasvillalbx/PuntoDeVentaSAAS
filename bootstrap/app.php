@@ -35,6 +35,17 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         /**
+         * ✅ EXCEPCIONES CSRF PARA WEBHOOKS (NO ELIMINA NADA)
+         * - Clip y Stripe envían POST desde fuera, así que CSRF debe excluirse en estas rutas.
+         * - Aun así, tú sigues protegiendo el webhook con firmas/verificación (Stripe) y lógica de seguridad.
+         */
+        $middleware->validateCsrfTokens(except: [
+            'clip/webhook',
+            'webhooks/clip-checkout',
+            'stripe/webhook',
+        ]);
+
+        /**
          * Aquí también podrías:
          * - Añadir middlewares globales con $middleware->append(...)
          * - Sobrescribir grupos 'web'/'api' con $middleware->web([...]) / $middleware->api([...])

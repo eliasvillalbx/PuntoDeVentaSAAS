@@ -21,6 +21,7 @@ class EmpresaController extends Controller
     public function __construct()
     {
         // Constructor reservado para middlewares o inyección de dependencias futura
+        
     }
 
     /*

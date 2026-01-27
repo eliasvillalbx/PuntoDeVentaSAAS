@@ -29,19 +29,19 @@ return [
     'plans' => [
         'mensual' => [
             'label'       => 'Plan mensual',
-            'amount'      => 00.01,
+            'amount'      => 10.00,
             'currency'    => 'MXN',
             'description' => 'Suscripción mensual a la plataforma',
         ],
         'trimestral' => [
             'label'       => 'Plan trimestral',
-            'amount'      => 01.00,
+            'amount'      => 11.00,
             'currency'    => 'MXN',
             'description' => 'Suscripción trimestral a la plataforma',
         ],
         'anual' => [
             'label'       => 'Plan anual',
-            'amount'      => 2599.00,
+            'amount'      => 13.00,
             'currency'    => 'MXN',
             'description' => 'Suscripción anual a la plataforma',
         ],

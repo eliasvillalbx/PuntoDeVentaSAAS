@@ -3,73 +3,81 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
 
 class SuscripcionPagadaNotification extends Notification
 {
     use Queueable;
 
     public function __construct(
-        public string $provider,       // stripe|clip
         public int $empresaId,
         public string $empresaNombre,
-        public string $planDb,          // 1_mes|6_meses|1_año|3_años
-        public string $planLabel,       // Mensual|Semestral|Anual|3 Años
-        public string $fechaInicio,     // YYYY-mm-dd HH:ii:ss
-        public string $fechaVenc,       // YYYY-mm-dd HH:ii:ss
-        public ?int $amountCents = null,
-        public ?string $currency = null,
-        public ?string $reference = null, // cs_test_... o me_reference_id
-        public bool $renovada = false,
+        public int $suscripcionId,
+        public string $plan,
+        public string $stripeSessionId,
+        public string $tipo,                 // creada | renovada
+        public ?float $monto = null,         // ✅ opcional
+        public string $moneda = 'MXN',        // ✅ opcional
+        public ?string $periodoHumano = null  // ✅ opcional (ej: "1 mes", "6 meses", "1 año")
     ) {}
 
-    public function via($notifiable): array
+    public function via(object $notifiable): array
     {
-        // Si no hay email, manda solo a sistema
-        $channels = ['database'];
-
-        if (!empty($notifiable->email)) {
-            $channels[] = 'mail';
-        }
-
-        return $channels;
+        return ['database', 'mail'];
     }
 
-    public function toMail($notifiable): MailMessage
+    private function planHumano(): string
     {
-        $montoTxt = '';
-        if ($this->amountCents !== null && $this->currency) {
-            $montoTxt = number_format($this->amountCents / 100, 2) . ' ' . strtoupper($this->currency);
-        }
+        // Ajusta si quieres otros textos
+        return match ($this->plan) {
+            '1_mes'   => 'Plan Mensual',
+            '6_meses' => 'Plan Semestral',
+            '1_año'   => 'Plan Anual',
+            '3_años'  => 'Plan 3 Años',
+            default   => 'Plan',
+        };
+    }
+
+    private function formatoMonto(): string
+    {
+        if ($this->monto === null) return '—';
+        return '$' . number_format($this->monto, 2) . ' ' . strtoupper($this->moneda);
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $titulo = $this->tipo === 'renovada'
+            ? 'Pago procesado · Suscripción renovada'
+            : 'Pago procesado · Suscripción activada';
+
+        $subtitulo = "Empresa: {$this->empresaNombre}";
 
         return (new MailMessage)
-            ->subject('Pago recibido - Suscripción ' . ($this->renovada ? 'renovada' : 'activada'))
-            ->greeting('Hola ' . ($notifiable->name ?? ''))
-            ->line('Se recibió un pago y la suscripción fue ' . ($this->renovada ? 'renovada' : 'activada') . '.')
-            ->line('Empresa: ' . $this->empresaNombre . ' (ID: ' . $this->empresaId . ')')
-            ->line('Plan: ' . $this->planLabel . ' (' . $this->planDb . ')')
-            ->when($montoTxt !== '', fn($msg) => $msg->line('Monto: ' . $montoTxt))
-            ->line('Vigencia: ' . $this->fechaInicio . ' → ' . $this->fechaVenc)
-            ->when(!empty($this->reference), fn($msg) => $msg->line('Referencia: ' . $this->reference))
-            ->line('Si no ves el acceso reflejado de inmediato, espera unos minutos y vuelve a entrar.');
+            ->subject($titulo)
+            ->greeting("Hola {$notifiable->nombre_completo} 👋")
+            ->line("Se procesó correctamente un pago de suscripción.")
+            ->line($subtitulo)
+            ->line("**" . $this->planHumano() . "**" . ($this->periodoHumano ? " ({$this->periodoHumano})" : ""))
+            ->line("Monto: **" . $this->formatoMonto() . "**")
+            ->line("Ya puedes seguir usando el sistema con normalidad.")
+            ->salutation('ATIENDEMAS');
     }
 
-    public function toArray($notifiable): array
+    public function toArray(object $notifiable): array
     {
+        $accion = $this->tipo === 'renovada' ? 'renovada' : 'activada';
+
         return [
-            'type'          => 'suscripcion_pagada',
-            'provider'      => $this->provider,
-            'empresa_id'    => $this->empresaId,
-            'empresa_nombre'=> $this->empresaNombre,
-            'plan'          => $this->planDb,
-            'plan_label'    => $this->planLabel,
-            'fecha_inicio'  => $this->fechaInicio,
-            'fecha_vencimiento' => $this->fechaVenc,
-            'amount_cents'  => $this->amountCents,
-            'currency'      => $this->currency,
-            'reference'     => $this->reference,
-            'renovada'      => $this->renovada,
+            'type' => 'suscripcion_pagada',
+            'title' => "Pago procesado",
+            'message' => "Suscripción {$accion} para {$this->empresaNombre}.",
+            'empresa_id' => $this->empresaId,
+            'suscripcion_id' => $this->suscripcionId,
+            'plan' => $this->plan,
+            'monto' => $this->monto,
+            'moneda' => $this->moneda,
+            'periodo' => $this->periodoHumano,
         ];
     }
 }

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Empresa;
 use App\Models\Suscripcion;
+use App\Models\User;
+use App\Notifications\SuscripcionPagadaNotification;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
@@ -11,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class BillingController extends Controller
 {
@@ -241,7 +244,6 @@ class BillingController extends Controller
         // ✅ Map al ENUM real de tu BD (NO cambiamos BD)
         $dbPlan = $this->mapUiPlanToDbEnum($uiPlan);
 
-        // Si trimestral no existe en BD, aquí puedes decidir si bloquearlo:
         if ($dbPlan === null) {
             return back()->withInput()->withErrors('Este plan no está disponible con la configuración actual de la base de datos.');
         }
@@ -272,11 +274,10 @@ class BillingController extends Controller
 
                 'client_reference_id' => $meReferenceId,
 
-                // ✅ Guardamos el plan de BD, no el de UI
                 'metadata' => [
                     'me_reference_id' => (string) $meReferenceId,
                     'empresa_id'      => (string) $empresa->id,
-                    'plan'            => (string) $dbPlan,       // <-- 1_mes | 6_meses | 1_año | 3_años
+                    'plan'            => (string) $dbPlan,
                     'months'          => (string) max(1, $months),
                     'user_id'         => (string) $user->id,
                 ],
@@ -328,7 +329,7 @@ class BillingController extends Controller
                 return redirect()->route('billing.alert')->withErrors('El pago aún no está confirmado. Espera unos minutos.');
             }
 
-            // ✅ FIX metadata
+            // ✅ FIX metadata (y ahora también NOTIFICA)
             $this->bestEffortCreateOrRenewFromStripeSession($session);
 
             return redirect()->route('dashboard')
@@ -355,12 +356,12 @@ class BillingController extends Controller
     // ==========================================================
     private function bestEffortCreateOrRenewFromStripeSession(\Stripe\Checkout\Session $session): void
     {
-        // ✅ CORRECTO: convertir StripeObject metadata a array normal
         $meta = $session->metadata ? $session->metadata->toArray() : [];
 
         $empresaId = (int) ($meta['empresa_id'] ?? 0);
-        $dbPlan    = trim((string) ($meta['plan'] ?? '')); // ya viene como enum de BD
+        $dbPlan    = trim((string) ($meta['plan'] ?? ''));
         $months    = (int) ($meta['months'] ?? 0);
+        $userId    = (int) ($meta['user_id'] ?? 0);
 
         if ($empresaId <= 0 || $dbPlan === '') {
             Log::warning('Stripe best-effort: metadata incompleta', [
@@ -370,7 +371,11 @@ class BillingController extends Controller
             return;
         }
 
-        DB::transaction(function () use ($empresaId, $dbPlan, $months, $session) {
+        // Para notificación
+        $tipo = null; // 'creada' | 'renovada'
+        $suscripcionId = null;
+
+        DB::transaction(function () use ($empresaId, $dbPlan, $months, $session, &$tipo, &$suscripcionId) {
 
             $yaActiva = Suscripcion::deEmpresa($empresaId)
                 ->where('estado', 'activa')
@@ -398,12 +403,15 @@ class BillingController extends Controller
 
                 if ($estaVencida) {
                     $ultima->update([
-                        'plan'              => $dbPlan, // ✅ enum correcto
+                        'plan'              => $dbPlan,
                         'fecha_inicio'      => $inicio->toDateTimeString(),
                         'fecha_vencimiento' => $venc->toDateTimeString(),
                         'estado'            => 'activa',
                         'renovado'          => true,
                     ]);
+
+                    $tipo = 'renovada';
+                    $suscripcionId = $ultima->id;
 
                     Log::info('Stripe best-effort: suscripción RENOVADA', [
                         'empresa_id' => $empresaId,
@@ -416,14 +424,17 @@ class BillingController extends Controller
                 }
             }
 
-            Suscripcion::create([
+            $nueva = Suscripcion::create([
                 'empresa_id'        => $empresaId,
-                'plan'              => $dbPlan, // ✅ enum correcto
+                'plan'              => $dbPlan,
                 'fecha_inicio'      => $inicio->toDateTimeString(),
                 'fecha_vencimiento' => $venc->toDateTimeString(),
                 'estado'            => 'activa',
                 'renovado'          => false,
             ]);
+
+            $tipo = 'creada';
+            $suscripcionId = $nueva->id;
 
             Log::info('Stripe best-effort: suscripción CREADA', [
                 'empresa_id' => $empresaId,
@@ -432,32 +443,92 @@ class BillingController extends Controller
                 'session_id' => $session->id ?? null,
             ]);
         });
+
+        // ✅ Notificar SOLO si realmente se creó/renovó (si ya había activa, no)
+        if ($tipo && $suscripcionId) {
+            $this->notifyAEsPagoStripe(
+                empresaId: $empresaId,
+                suscripcionId: $suscripcionId,
+                planDb: $dbPlan,
+                sessionId: (string) ($session->id ?? ''),
+                tipo: $tipo
+            );
+        } else {
+            Log::info('Stripe Notify: no se notificó (sin cambios)', [
+                'empresa_id' => $empresaId,
+                'session_id' => $session->id ?? null,
+            ]);
+        }
     }
 
     /**
-     * Mapea tus planes de UI a los ENUM reales de la BD.
-     * NO cambia la BD, solo adapta el código.
+     * ✅ NOTIFICACIÓN A AEs (administrador_empresa) por sistema (DB) + correo.
+     * No te cambia Users, roles, ni nada extra.
      */
+    private function notifyAEsPagoStripe(int $empresaId, int $suscripcionId, string $planDb, string $sessionId, string $tipo): void
+    {
+        try {
+            $empresa = Empresa::find($empresaId);
+
+            // AEs de esa empresa
+            $aes = User::query()
+                ->where('id_empresa', $empresaId)
+                ->role('administrador_empresa')
+                ->get();
+
+            Log::info('Stripe Notify: AEs encontrados', [
+                'empresa_id' => $empresaId,
+                'count' => $aes->count(),
+                'ids' => $aes->pluck('id')->all(),
+                'session_id' => $sessionId,
+                'tipo' => $tipo,
+            ]);
+
+            if ($aes->isEmpty()) {
+                Log::warning('Stripe Notify: no hay AEs con rol administrador_empresa en la empresa', [
+                    'empresa_id' => $empresaId,
+                    'session_id' => $sessionId,
+                ]);
+                return;
+            }
+
+            Notification::send($aes, new SuscripcionPagadaNotification(
+                empresaId: $empresaId,
+                empresaNombre: $empresa->razon_social ?? ('Empresa #' . $empresaId),
+                suscripcionId: $suscripcionId,
+                plan: $planDb,
+                stripeSessionId: $sessionId,
+                tipo: $tipo
+            ));
+
+            Log::info('Stripe Notify: notificación enviada', [
+                'empresa_id' => $empresaId,
+                'to' => $aes->pluck('email')->all(),
+                'session_id' => $sessionId,
+            ]);
+
+        } catch (\Throwable $e) {
+            Log::error('Stripe Notify: excepción', [
+                'empresa_id' => $empresaId,
+                'msg' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+        }
+    }
+
     private function mapUiPlanToDbEnum(string $uiPlan): ?string
     {
         $uiPlan = strtolower(trim($uiPlan));
 
         return match ($uiPlan) {
             'mensual'    => '1_mes',
-            // ⚠️ No existe 3 meses en tu enum. Decide:
-            // - si quieres mantener "trimestral" en UI: lo mapeamos a 6_meses (siguiente cercano)
-            // - si no quieres eso, regresa null para bloquearlo
             'trimestral' => '6_meses',
             'anual'      => '1_año',
             default      => null,
         };
     }
 
-    /**
-     * Calcula vencimiento según el plan REAL de BD.
-     * Si tu Suscripcion::calcularVencimiento solo entiende mensual/trimestral/anual,
-     * aquí lo hacemos directo por el enum.
-     */
     private function calcVencimientoFromDbPlan(Carbon $inicio, string $dbPlan, int $months): Carbon
     {
         $dbPlan = trim($dbPlan);
